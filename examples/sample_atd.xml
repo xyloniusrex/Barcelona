@@ -1,1 +1,19 @@
-<root><Team id="1" name="Home"/><Team id="2" name="Away"/></root>
+<?xml version="1.0" encoding="UTF-8"?>
+<FbEPTS version="1.0">
+  <Match id="1">
+    <Team id="1" name="Barcelona" side="Home">
+      <Player id="1" shirtNumber="1"/>
+      <Player id="2" shirtNumber="2"/>
+      <Player id="3" shirtNumber="3"/>
+      <Player id="4" shirtNumber="4"/>
+      <Player id="5" shirtNumber="5"/>
+    </Team>
+    <Team id="2" name="Athletic" side="Away">
+      <Player id="6" shirtNumber="6"/>
+      <Player id="7" shirtNumber="7"/>
+      <Player id="8" shirtNumber="8"/>
+      <Player id="9" shirtNumber="9"/>
+      <Player id="10" shirtNumber="10"/>
+    </Team>
+  </Match>
+</FbEPTS>
