@@ -73,6 +73,10 @@ class UserIn(BaseModel):
     year: int | None = None
     semester_abroad: str | None = None
     mode: str | None = None
+    theme: str | None = None
+    language: str | None = None
+    onboarding: str | None = None
+    availability: str | None = None
 
 
 @app.get("/api/home-courses")
@@ -125,9 +129,17 @@ def create_user(user: UserIn):
         exists = conn.execute("SELECT 1 FROM users WHERE id = ?", (uid,)).fetchone()
         if not exists:
             conn.execute(
-                "INSERT INTO users (id, email, faculty, program, year, semester_abroad) VALUES (?,?,?,?,?,?)",
-                (uid, user.email, user.faculty, user.program, user.year, user.semester_abroad),
+                "INSERT INTO users (id, email, faculty, program, year, semester_abroad, "
+                "theme, language, onboarding, availability) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                (uid, user.email, user.faculty, user.program, user.year, user.semester_abroad,
+                 user.theme, user.language, user.onboarding, user.availability),
             )
+        else:
+            sets = {k: v for k, v in user.model_dump().items()
+                    if k not in ("id",) and v is not None and k != "email"}
+            if sets:
+                cols = ", ".join(f"{k} = ?" for k in sets)
+                conn.execute(f"UPDATE users SET {cols} WHERE id = ?", (*sets.values(), uid))
     return {"id": uid}
 
 
@@ -305,8 +317,12 @@ def signup(s: SignupIn):
 class UserDocIn(BaseModel):
     user_id: str
     doc_type: str
-    file_name: str
+    file_name: str = ""
     size: int = 0
+    doc_number: str | None = None
+    issued_on: str | None = None
+    expires_on: str | None = None
+    notes: str | None = None
 
 
 @app.get("/api/user-docs")
@@ -320,18 +336,35 @@ def user_docs(user_id: str):
 
 @app.post("/api/user-docs")
 def add_user_doc(doc: UserDocIn):
-    """Identity documents: only the record (type/name/size) is stored here.
-    The file itself never leaves the user's device - it lives in IndexedDB,
-    so the server holds no sensitive personal documents."""
+    """Identity documents: only the record (type/name/size/manual data) is
+    stored here. A photo, if any, never leaves the user's device - it lives in
+    IndexedDB, so the server holds no sensitive personal files."""
     with db() as conn:
         conn.execute(
-            "INSERT OR REPLACE INTO user_docs (user_id, doc_type, file_name, size) VALUES (?,?,?,?)",
-            (doc.user_id, doc.doc_type, doc.file_name, doc.size),
+            "INSERT OR REPLACE INTO user_docs (user_id, doc_type, file_name, size, "
+            "doc_number, issued_on, expires_on, notes) VALUES (?,?,?,?,?,?,?,?)",
+            (doc.user_id, doc.doc_type, doc.file_name, doc.size,
+             doc.doc_number, doc.issued_on, doc.expires_on, doc.notes),
         )
         row = conn.execute(
             "SELECT * FROM user_docs WHERE user_id = ? AND doc_type = ?",
             (doc.user_id, doc.doc_type),
         ).fetchone()
+    return job(row)
+
+
+@app.patch("/api/user-docs/{doc_id}")
+def update_user_doc(doc_id: int, user_id: str, doc: UserDocIn):
+    fields = {k: v for k, v in doc.model_dump().items()
+              if k not in ("user_id", "doc_type") and v is not None}
+    with db() as conn:
+        row = conn.execute("SELECT * FROM user_docs WHERE id = ? AND user_id = ?", (doc_id, user_id)).fetchone()
+        if not row:
+            raise HTTPException(404, "no such document")
+        if fields:
+            sets = ", ".join(f"{k} = ?" for k in fields)
+            conn.execute(f"UPDATE user_docs SET {sets} WHERE id = ?", (*fields.values(), doc_id))
+        row = conn.execute("SELECT * FROM user_docs WHERE id = ?", (doc_id,)).fetchone()
     return job(row)
 
 
@@ -351,6 +384,20 @@ def get_user_by_email(email: str):
     if not row:
         raise HTTPException(404, "no account for this email")
     return job(row)
+
+
+@app.get("/api/i18n/{lang}")
+def get_strings(lang: str):
+    """Translated UI strings. Generated server-side once per language, then
+    always served from the saved translations table."""
+    from server.i18n import ensure_language
+    return ensure_language(lang)
+
+
+@app.get("/api/deadlines")
+def deadlines():
+    """Project paperwork deadlines (static seed data, client caches it)."""
+    return {"deadlines": seedmod.PROJECT_DEADLINES}
 
 
 @app.get("/api/health")

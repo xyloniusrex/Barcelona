@@ -10,7 +10,8 @@ ICONS = {
     "camera": "camera", "plus": "plus", "x": "x", "trash-2": "trash-2",
     "triangle-alert": "triangle-alert", "check": "check", "arrow-right": "arrow-right",
     "sparkles": "sparkles", "shield-check": "shield-check", "log-out": "log-out",
-    "info": "info", "link": "link",
+    "info": "info", "link": "link", "eye": "eye", "arrow-left": "arrow-left",
+    "map": "map", "moon": "moon", "bookmark": "bookmark", "activity": "activity",
 }
 
 FLAGS = ["at", "pt", "be", "lv", "ro"]

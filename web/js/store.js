@@ -8,6 +8,10 @@ const Store = (() => {
     userId: null,
     sessionEmail: null,
     seenLanding: false,
+    theme: 'dark',
+    language: 'en',
+    strings: {},
+    availability: [],
     mode: 'explore',
     user: null,
     universities: [],
@@ -26,20 +30,39 @@ const Store = (() => {
   function loadLocal() {
     try {
       const raw = localStorage.getItem(LS_KEY);
-      if (raw) Object.assign(state, JSON.parse(raw));
+      if (raw) {
+        Object.assign(state, JSON.parse(raw));
+        state.screen = 'welcome'; // never restore mid-screen
+      }
     } catch (e) { /* fresh device */ }
+    try {
+      const s = localStorage.getItem(LS_KEY + '-i18n');
+      if (s) state.strings = JSON.parse(s) || {};
+    } catch (e) { state.strings = {}; }
+    if (typeof state.availability === 'string') {
+      try { state.availability = JSON.parse(state.availability); } catch (e) { state.availability = []; }
+    }
+    if (!Array.isArray(state.availability)) state.availability = [];
     if (!state.userId) {
       state.userId = newId();
       saveLocal();
     }
+    applyTheme();
   }
 
   function saveLocal() {
-    const { userId, sessionEmail, seenLanding, mode, user, mobility, tasks } = state;
-    localStorage.setItem(LS_KEY, JSON.stringify({ userId, sessionEmail, seenLanding, mode, user, mobility, tasks }));
+    const { userId, sessionEmail, seenLanding, theme, language, mode, user, mobility, tasks, availability, calView } = state;
+    localStorage.setItem(LS_KEY, JSON.stringify({ userId, sessionEmail, seenLanding, theme, language, mode, user, mobility, tasks, availability, calView }));
     if (state.universities.length) {
       localStorage.setItem(LS_KEY + '-seed', JSON.stringify({ universities: state.universities, homeCourses: state.homeCourses }));
     }
+    if (Object.keys(state.strings).length) {
+      localStorage.setItem(LS_KEY + '-i18n', JSON.stringify(state.strings));
+    }
+  }
+
+  function applyTheme() {
+    document.documentElement.dataset.theme = state.theme === 'light' ? 'light' : 'dark';
   }
 
   async function api(path, opts) {
@@ -65,6 +88,13 @@ const Store = (() => {
     if (me.mobility) {
       try { state.tasks = (await api('/api/mobilities/' + me.mobility.id)).tasks; } catch (e) {}
     }
+    if (me.theme) state.theme = me.theme;
+    if (me.language) state.language = me.language;
+    if (me.availability) {
+      try { state.availability = JSON.parse(me.availability) || []; } catch (e) { state.availability = []; }
+    }
+    applyTheme();
+    return me;
   }
 
   async function boot() {
@@ -84,12 +114,71 @@ const Store = (() => {
       } catch (e2) { /* first run offline: empty until online */ }
     }
 
+    // project deadlines — static seed, cached by the service worker
+    try { state.deadlines = (await api('/api/deadlines')).deadlines; } catch (e) { state.deadlines = []; }
+
     // user-specific state
     try {
       await refreshUserState();
     } catch (e) { /* server unreachable — stay in local state */ }
+    if (state.language && state.language !== 'en') await loadStrings(state.language);
     saveLocal();
     return state;
+  }
+
+  /* ---------- i18n: the server translated these once and saved them ---------- */
+
+  async function loadStrings(lang) {
+    if (!lang || lang === 'en') { state.strings = {}; state.language = 'en'; saveLocal(); return state.strings; }
+    try {
+      const out = await api('/api/i18n/' + encodeURIComponent(lang));
+      state.strings = out.strings || {};
+      state.language = lang;
+      saveLocal();
+    } catch (e) { /* keep old strings when offline */ }
+    return state.strings;
+  }
+
+  function t(key) {
+    return (state.strings && state.strings[key]) || key;
+  }
+
+  /* ---------- settings ---------- */
+
+  function setTheme(theme) {
+    state.theme = theme === 'light' ? 'light' : 'dark';
+    applyTheme();
+    saveLocal();
+    fetch('/api/users/' + state.userId, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ theme: state.theme }),
+    }).catch(() => {});
+  }
+
+  function setLanguage(lang) {
+    state.language = lang === 'en' ? 'en' : lang;
+    saveLocal();
+    return loadStrings(state.language);
+  }
+
+  /* ---------- availability (calendar day toggles) ---------- */
+
+  function isAvailable(dateStr) {
+    return state.availability.indexOf(dateStr) !== -1;
+  }
+
+  function toggleAvailability(dateStr) {
+    const i = state.availability.indexOf(dateStr);
+    if (i === -1) state.availability.push(dateStr);
+    else state.availability.splice(i, 1);
+    saveLocal();
+    fetch('/api/users/' + state.userId, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ availability: JSON.stringify(state.availability) }),
+    }).catch(() => {});
+    return state.availability.indexOf(dateStr) !== -1;
   }
 
   async function saveProfile(fields, mode) {
@@ -123,10 +212,7 @@ const Store = (() => {
     });
     state.sessionEmail = email;
     try {
-      const me = await api('/api/users/' + state.userId);
-      state.user = me;
-      state.mode = me.mode || 'explore';
-      state.mobility = me.mobility || null;
+      await refreshUserState();
     } catch (e) { /* keep local state */ }
     saveLocal();
     return state;
@@ -137,6 +223,7 @@ const Store = (() => {
     state.user = null;
     state.mobility = null;
     state.tasks = [];
+    state.availability = [];
     state.mode = 'explore';
     state.userId = newId();
     state.screen = 'landing';
@@ -177,16 +264,16 @@ const Store = (() => {
   }
 
   async function toggleTask(taskId, done) {
-    const t = state.tasks.find(t => t.id === taskId);
-    if (t) t.done = done ? 1 : 0;
+    const task = state.tasks.find(x => x.id === taskId);
+    if (task) task.done = done ? 1 : 0;
     saveLocal();
     try { await api('/api/tasks/' + taskId + '?done=' + (done ? 'true' : 'false'), { method: 'PATCH', body: 'null' }); } catch (e) {}
   }
 
   async function addTask(mobilityId, title, stage, dueDate) {
     try {
-      const t = await api('/api/tasks', { method: 'POST', body: JSON.stringify({ mobility_id: mobilityId, title, stage, due_date: dueDate }) });
-      state.tasks.push(t);
+      const task = await api('/api/tasks', { method: 'POST', body: JSON.stringify({ mobility_id: mobilityId, title, stage, due_date: dueDate }) });
+      state.tasks.push(task);
     } catch (e) {
       state.tasks.push({ id: -Date.now(), title, stage, due_date: dueDate, source: 'user', done: 0, mobility_id: mobilityId });
     }
@@ -220,6 +307,13 @@ const Store = (() => {
     return api('/api/user-docs', {
       method: 'POST',
       body: JSON.stringify(Object.assign({ user_id: state.userId }, doc)),
+    });
+  }
+
+  async function updateUserDoc(docId, fields) {
+    return api('/api/user-docs/' + docId + '?user_id=' + state.userId, {
+      method: 'PATCH',
+      body: JSON.stringify(Object.assign({ user_id: state.userId, doc_type: '-' }, fields)),
     });
   }
 
@@ -264,6 +358,8 @@ const Store = (() => {
     state, boot, saveProfile, saveLocal, uniById, score, sortedUnis,
     addToShortlist, removeFromShortlist, accept, toggleTask, addTask, scan, getScans, getUniversityDetail,
     login, signup, logout, notify,
-    safeUserDocs, addUserDoc, deleteUserDoc, saveDocBlob, getDocBlob, deleteDocBlob,
+    safeUserDocs, addUserDoc, updateUserDoc, deleteUserDoc, saveDocBlob, getDocBlob, deleteDocBlob,
+    loadStrings, t, setTheme, setLanguage,
+    isAvailable, toggleAvailability,
   };
 })();
