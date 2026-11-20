@@ -1,2 +1,4 @@
-target/
-*.d
+data/poligo.db*
+__pycache__/
+*.pyc
+.vibe/
