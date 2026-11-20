@@ -3,17 +3,28 @@
 const App = (() => {
   const NAVS = {
     explore: [
-      ['map', 'Map', '\uD83C\uDF0D'],
-      ['universities', 'Universities', '\uD83C\uDFDB'],
-      ['shortlist', 'Shortlist', '\uD83D\uDD16'],
-      ['profile', 'Profile', '\uD83D\uDC64'],
+      ['map', 'Map'],
+      ['universities', 'Universities'],
+      ['shortlist', 'Shortlist'],
+      ['profile', 'Profile'],
     ],
     journey: [
-      ['today', 'Today', '\u2600'],
-      ['timeline', 'Timeline', '\uD83D\uDCC5'],
-      ['scanJ', 'Scan', '\uD83D\uDCF7'],
-      ['docs', 'Docs', '\uD83D\uDCC4'],
+      ['today', 'Today'],
+      ['timeline', 'Timeline'],
+      ['scanJ', 'Scan'],
+      ['docs', 'Docs'],
     ],
+  };
+  const NAV_ICONS = {
+    map: 'globe', universities: 'landmark', shortlist: 'bookmark', profile: 'user',
+    today: 'sun', timeline: 'calendar-days', scanJ: 'scan-line', docs: 'file-text',
+  };
+  const NAV_SCREENS = new Set([].concat(NAVS.explore, NAVS.journey).map(n => n[0]));
+  const STAGES = ['before', 'arrival', 'during', 'before-return', 'after-return'];
+  const DOC_TYPES = ['ID card', 'Passport', 'Student ID', 'EHIC card', 'Grant contract', 'Learning Agreement', 'Other'];
+  const DOC_ICONS = {
+    'ID card': 'id-card', 'Passport': 'id-card', 'Student ID': 'id-card',
+    'EHIC card': 'id-card', 'Other': 'file-text',
   };
 
   let dotsStop = null;
@@ -47,11 +58,11 @@ const App = (() => {
 
   function renderNav() {
     const { mode, screen } = Store.state;
-    if (screen === 'welcome') { $nav.hidden = true; return; }
+    if (!NAV_SCREENS.has(screen)) { $nav.hidden = true; return; }
     $nav.hidden = false;
     $nav.innerHTML = '';
-    for (const [id, label, ico] of NAVS[mode]) {
-      const b = h(`<button class="${screen === id ? 'active' : ''}"><span class="ico">${ico}</span><span>${label}</span></button>`);
+    for (const [id, label] of NAVS[mode]) {
+      const b = h(`<button class="${screen === id ? 'active' : ''}"><span class="ico">${icon(NAV_ICONS[id])}</span><span>${label}</span></button>`);
       b.onclick = () => go(id);
       $nav.appendChild(b);
     }
@@ -67,24 +78,55 @@ const App = (() => {
     setAccent();
     renderNav();
     if (dotsStop) { dotsStop(); dotsStop = null; }
-    const { screen, mode } = Store.state;
-    const views = {
-      welcome: viewWelcome, profile: viewProfile, subjects: viewSubjects,
-      map: viewMap, universities: viewUniversities, uni: viewUniversity,
-      shortlist: viewShortlist, today: viewToday, timeline: viewTimeline,
-      scanJ: viewScan, docs: viewDocs,
-    };
-    if (mode === 'explore') configureExploreGlobe(screen);
-    else configureJourneyGlobe(screen);
-    $app.innerHTML = '';
-    (views[screen] || viewWelcome)($app);
-    window.scrollTo(0, 0);
+    try {
+      const { screen, mode } = Store.state;
+      const views = {
+        landing: viewLanding, auth: viewAuth, docsSetup: viewDocsSetup,
+        profile: viewProfile, subjects: viewSubjects,
+        map: viewMap, universities: viewUniversities, uni: viewUniversity,
+        shortlist: viewShortlist, today: viewToday, timeline: viewTimeline,
+        scanJ: viewScan, docs: viewDocs,
+      };
+      if (mode === 'explore') configureExploreGlobe(screen);
+      else configureJourneyGlobe(screen);
+      $app.innerHTML = '';
+      (views[screen] || viewLanding)($app);
+      window.scrollTo(0, 0);
+    } catch (err) {
+      showFatal(err);
+    }
   }
+
+  /* ---------- error boundary ---------- */
+
+  function showFatal(err) {
+    $nav.hidden = true;
+    $app.innerHTML = '';
+    const wrap = h(`<div class="screen panel" style="padding:88px 12px 0">
+      <div class="card fatal">
+        <p class="section-label">Something broke on this screen</p>
+        <h2>That view failed to load</h2>
+        <pre>${esc(err && err.stack ? err.stack : String(err || 'unknown error'))}</pre>
+        <button class="primary">Reload the app</button>
+        <button class="link">Back to the start</button>
+      </div>
+    </div>`);
+    wrap.querySelector('.primary').onclick = () => window.location.reload();
+    wrap.querySelector('.link').onclick = () => {
+      Store.state.screen = 'landing';
+      Store.saveLocal();
+      render();
+    };
+    $app.appendChild(wrap);
+  }
+
+  window.addEventListener('error', e => showFatal(e.error || e.message));
+  window.addEventListener('unhandledrejection', e => showFatal(e.reason));
 
   /* ---------- globe scenes ---------- */
 
   function configureExploreGlobe(screen) {
-    Globe.setAutoRotate(screen === 'welcome');
+    Globe.setAutoRotate(screen === 'landing' || screen === 'auth');
     Globe.setDestination(null);
     Globe.setArcs([]);
     Globe.setPulses([]);
@@ -117,19 +159,165 @@ const App = (() => {
     Globe.focusTo((45.75 + uni.lat) / 2, (21.23 + uni.lng) / 2);
   }
 
-  /* ---------- explore screens ---------- */
+  /* ---------- landing / auth / documents ---------- */
 
-  function viewWelcome(root) {
-    const wrap = h(`<div class="screen-welcome">
-      <h1>Where will your Erasmus take you?</h1>
-      <p class="slogan">Leave on Erasmus. Come back with every credit.</p>
-      <button class="primary">Find my matches</button>
-      <button class="link">Already accepted? Skip to your journey</button>
+  function viewLanding(root) {
+    const wrap = h(`<div class="landing">
+      <div class="brand">${icon('globe')}PoliGo</div>
+      <div class="hero">
+        <h1>Leave on Erasmus.<br/>Come back with every credit.</h1>
+        <p class="slogan">PoliGo plans your exchange from Timisoara: match your UPT subjects with partner universities, keep the paperwork on schedule, and understand every foreign document.</p>
+      </div>
+      <div class="features">
+        <div class="feat">${icon('globe')}<span><span class="f-title">Find your matches</span><span class="f-sub">Partner universities ranked by how much of your 30 ECTS they cover.</span></span></div>
+        <div class="feat">${icon('calendar-days')}<span><span class="f-title">Stay on schedule</span><span class="f-sub">A journey timeline built around your accepted mobility dates.</span></span></div>
+        <div class="feat">${icon('scan-line')}<span><span class="f-title">Read any document</span><span class="f-sub">Scan rental contracts or registration forms and get plain answers.</span></span></div>
+      </div>
+      <button class="primary" id="signup-btn">Create account</button>
+      <button class="ghost" id="login-btn" style="margin-top:10px">Log in</button>
+      <button class="link" id="skip-btn">Explore without an account</button>
+      <div class="updates">
+        <span class="f-title">Get notified at launch</span>
+        <div class="updates-row">
+          <input id="u-email" type="email" placeholder="you@upt.ro" />
+          <button class="icon-btn" id="u-send" aria-label="Notify me">${icon('arrow-right')}</button>
+        </div>
+      </div>
     </div>`);
-    wrap.querySelector('.primary').onclick = () => go(Store.state.user?.program ? 'subjects' : 'profile');
-    wrap.querySelector('.link').onclick = () => openAcceptedSheet();
+    wrap.querySelector('#signup-btn').onclick = () => go('auth');
+    wrap.querySelector('#login-btn').onclick = () => go('auth');
+    wrap.querySelector('#skip-btn').onclick = () => {
+      Store.state.seenLanding = true;
+      Store.saveLocal();
+      go('profile');
+    };
+    wrap.querySelector('#u-send').onclick = async () => {
+      const inp = wrap.querySelector('#u-email');
+      if (!inp.value.trim()) { toast('Enter your email first'); return; }
+      try { await Store.notify(inp.value.trim()); toast('You are on the list'); inp.value = ''; }
+      catch (e) { toast('Could not save it - try again later'); }
+    };
     root.appendChild(wrap);
   }
+
+  function viewAuth(root) {
+    const wrap = h(`<div class="screen panel" style="padding:88px 12px 0">
+      <div class="card">
+        <p class="section-label">Sign in or create an account</p>
+        <h2 style="margin:0 0 4px">Your Erasmus, synced</h2>
+        <p class="hint">One email, no passwords. Existing account logs in, new email creates an account.</p>
+        <div class="form-field"><label>Email</label>
+          <input id="a-email" type="email" placeholder="you@upt.ro" autocomplete="email" /></div>
+        <button class="primary">Continue</button>
+        <button class="link">Back</button>
+      </div>
+    </div>`);
+    wrap.querySelector('.link').onclick = () => go('landing');
+    wrap.querySelector('.primary').onclick = async () => {
+      const inp = wrap.querySelector('#a-email');
+      const email = inp.value.trim().toLowerCase();
+      if (!email || email.indexOf('@') < 1) { toast('Enter a valid email'); return; }
+      try {
+        await Store.login(email);
+        toast('Welcome back');
+        go(afterAuthScreen());
+      } catch (e) {
+        if (String(e.message).indexOf('404') !== -1) {
+          await Store.signup(email);
+          toast('Account created');
+          go('docsSetup');
+        } else {
+          toast('Could not sign in. Is the server online?');
+        }
+      }
+    };
+    root.appendChild(wrap);
+  }
+
+  function fmtSize(n) {
+    if (!n) return '';
+    if (n < 1024) return n + ' B';
+    if (n < 1048576) return Math.round(n / 1024) + ' KB';
+    return (n / 1048576).toFixed(1) + ' MB';
+  }
+
+  async function viewDocsSetup(root) {
+    let docs = await Store.safeUserDocs();
+    const wrap = h(`<div class="screen panel" style="padding:88px 12px 0">
+      <div class="card">
+        <p class="section-label">Documents you will need often</p>
+        <p class="hint">Your ID, passport, student ID, EHIC card... offices ask for them again and again. The file itself stays on this device - the app only records the type, name and size.</p>
+        <div class="form-field"><label>Document type</label>
+          <div class="select-wrap">
+            <select id="doc-type">${DOC_TYPES.map(t => `<option>${t}</option>`).join('')}</select>
+            ${icon('chevron-down', 'sel-ico')}
+          </div>
+        </div>
+        <button class="primary" id="pick-doc">${icon('upload', 'inline-ico')} Upload a copy</button>
+        <input id="doc-file" type="file" hidden />
+        <div id="doc-list" style="margin-top:16px"></div>
+        <button class="primary" id="docs-done" style="margin-top:12px">Continue to profile</button>
+      </div>
+    </div>`);
+    const sel = wrap.querySelector('#doc-type');
+    const fileInput = wrap.querySelector('#doc-file');
+    const listEl = wrap.querySelector('#doc-list');
+
+    function drawList() {
+      listEl.innerHTML = '';
+      if (!docs.length) {
+        listEl.innerHTML = '<p class="hint">No documents yet. You can also add them later from your profile.</p>';
+        return;
+      }
+      for (const d of docs) {
+        const row = h(`<div class="doc-row" data-id="${d.id}">
+          <span class="doc-ico">${icon(DOC_ICONS[d.doc_type] || 'file-text')}</span>
+          <span style="flex:1;min-width:0"><span class="doc-name">${esc(d.doc_type)}</span><br/>
+          <span class="doc-meta">${esc(d.file_name)}${d.size ? ' - ' + fmtSize(d.size) : ''}</span></span>
+          <span class="pill good">${icon('check', 'sm-ico')} Saved</span>
+          <button class="icon-btn" data-del aria-label="Remove document">${icon('trash-2', 'sm-ico')}</button>
+        </div>`);
+        row.querySelector('[data-del]').onclick = async () => {
+          await Store.deleteUserDoc(d.id);
+          await Store.deleteDocBlob(d.doc_type);
+          docs = docs.filter(x => x.id !== d.id);
+          drawList();
+          toast('Document removed');
+        };
+        listEl.appendChild(row);
+      }
+    }
+
+    wrap.querySelector('#pick-doc').onclick = () => fileInput.click();
+    fileInput.onchange = async () => {
+      const f = fileInput.files && fileInput.files[0];
+      if (!f) return;
+      await Store.saveDocBlob(sel.value, f);
+      try {
+        const rec = await Store.addUserDoc({ doc_type: sel.value, file_name: f.name, size: f.size });
+        docs = docs.filter(d => d.doc_type !== rec.doc_type);
+        docs.push(rec);
+      } catch (e) {
+        docs.push({ id: -Date.now(), doc_type: sel.value, file_name: f.name, size: f.size });
+      }
+      drawList();
+      toast(sel.value + ' saved on this device');
+      fileInput.value = '';
+    };
+    wrap.querySelector('#docs-done').onclick = () => go('profile');
+
+    drawList();
+    root.appendChild(wrap);
+  }
+
+  function afterAuthScreen() {
+    const { mode, user } = Store.state;
+    if (mode === 'journey' && Store.state.mobility) return 'today';
+    if (user && user.program) return 'map';
+    return 'profile';
+  }
+
+  /* ---------- explore screens ---------- */
 
   function viewProfile(root) {
     const u = Store.state.user || {};
@@ -137,23 +325,49 @@ const App = (() => {
       <div class="card">
         <p class="section-label">Your profile</p>
         <div class="form-field"><label>Faculty</label>
-          <select id="f-faculty">
+          <div class="select-wrap"><select id="f-faculty">
             <option ${u.faculty === 'AC' ? 'selected' : ''}>AC - Computers and Information Technology</option>
             <option ${u.faculty && u.faculty !== 'AC' ? 'selected' : ''}>Other</option>
-          </select></div>
+          </select>${icon('chevron-down', 'sel-ico')}</div></div>
         <div class="form-field"><label>Program</label>
           <input id="f-program" list="programs" value="${esc(u.program || 'Computer Science')}" />
           <datalist id="programs"><option>Computer Science</option><option>Information Technology</option><option>Automation</option></datalist></div>
         <div class="form-field"><label>Year</label>
-          <select id="f-year">${[1, 2, 3, 4].map(y => `<option ${u.year === y ? 'selected' : ''}>${y}</option>`).join('')}</select></div>
+          <div class="select-wrap"><select id="f-year">${[1, 2, 3, 4].map(y => `<option ${u.year === y ? 'selected' : ''}>${y}</option>`).join('')}</select>${icon('chevron-down', 'sel-ico')}</div></div>
         <div class="form-field"><label>Semester abroad</label>
-          <select id="f-sem">
+          <div class="select-wrap"><select id="f-sem">
             <option value="fall" ${u.semester_abroad === 'fall' ? 'selected' : ''}>Fall</option>
             <option value="spring" ${u.semester_abroad === 'spring' ? 'selected' : ''}>Spring</option>
-          </select></div>
+          </select>${icon('chevron-down', 'sel-ico')}</div></div>
         <button class="primary">Save and pick subjects</button>
       </div>
+      <div class="card" style="margin-top:12px">
+        <p class="section-label">Documents</p>
+        <div id="prof-docs"><p class="hint" style="margin:0 0 12px">Add your ID, passport, student ID and EHIC card once - they are asked for everywhere.</p></div>
+        <button class="ghost" id="manage-docs" style="width:100%">Manage documents</button>
+      </div>
+      <div class="card" style="margin-top:12px">
+        <p class="section-label">Account</p>
+        <div class="doc-row">
+          <span class="doc-ico">${icon('user')}</span>
+          <span style="flex:1;min-width:0"><span class="doc-name">${esc(Store.state.sessionEmail || 'Guest on this device')}</span><br/>
+          <span class="doc-meta">${Store.state.sessionEmail ? 'Signed in' : 'Progress is stored only on this device'}</span></span>
+        </div>
+        ${Store.state.sessionEmail ? '<button class="ghost" id="logout" style="width:100%;margin-top:4px">Log out</button>' : '<button class="link" id="go-auth" style="padding-left:0">Sign in to sync</button>'}
+      </div>
     </div>`);
+
+    (async () => {
+      const docs = await Store.safeUserDocs();
+      const el = wrap.querySelector('#prof-docs');
+      if (docs.length) {
+        el.innerHTML = docs.map(d => `<div class="doc-row"><span class="doc-ico">${icon(DOC_ICONS[d.doc_type] || 'file-text')}</span>
+          <span style="flex:1;min-width:0"><span class="doc-name">${esc(d.doc_type)}</span><br/>
+          <span class="doc-meta">${esc(d.file_name)}</span></span>
+          <span class="pill good">${icon('check', 'sm-ico')} Saved</span></div>`).join('');
+      }
+    })();
+
     wrap.querySelector('.primary').onclick = async () => {
       await Store.saveProfile({
         faculty: wrap.querySelector('#f-faculty').value,
@@ -163,6 +377,11 @@ const App = (() => {
       });
       go('subjects');
     };
+    wrap.querySelector('#manage-docs').onclick = () => go('docsSetup');
+    const logoutBtn = wrap.querySelector('#logout');
+    if (logoutBtn) logoutBtn.onclick = async () => { await Store.logout(); go('landing'); };
+    const authBtn = wrap.querySelector('#go-auth');
+    if (authBtn) authBtn.onclick = () => go('auth');
     root.appendChild(wrap);
   }
 
@@ -174,7 +393,7 @@ const App = (() => {
         <p class="section-label">My subjects - ${esc(Store.state.user?.program || 'Computer Science')}</p>
         <div id="course-list"></div>
         <p style="color:var(--text-2);font-size:13px" id="ects-line"></p>
-        <button class="primary" style="margin-top:12px">Match me</button>
+        <button class="primary" style="margin-top:12px">Find my matches</button>
       </div>
     </div>`);
     const listEl = list.querySelector('#course-list');
@@ -218,7 +437,7 @@ const App = (() => {
       el.innerHTML = '';
       for (const u of unis) {
         const card = h(`<div class="card uni-card" style="cursor:pointer">
-          <span class="flag">${flag(u.country_code)}</span>
+          ${flagImg(u.country_code)}
           <span><span class="name">${esc(u.name)}</span><br/>
           <span class="meta">${esc(u.city)}, ${esc(u.country)} - ${esc((u.languages || []).join(', '))}</span></span>
           <span class="badge"><span class="num">${u.summary.matched}/${u.summary.total}</span><br/><span class="lbl">match</span></span>
@@ -229,10 +448,15 @@ const App = (() => {
     }
     root.appendChild(sheet);
 
-    // partner points light up with the python-rendered dots clip (cached after first run)
-    const c = h('<canvas class="anim-overlay" style="position:fixed;top:0;left:0;"></canvas>');
+    // Partner points light up with the python-rendered dots clip (cached on
+    // device after first run). The layer stays hidden until the clip is
+    // actually playing, and is removed on failure - never a black box.
+    const c = h('<canvas class="dots-layer" hidden></canvas>');
     document.body.appendChild(c);
-    Anim.loop('/anim/dots.mjpg?loop=1', c).then(stop => { dotsStop = () => { stop(); c.remove(); }; });
+    Anim.loop('/anim/dots.mjpg?loop=1', c).then(stop => {
+      c.hidden = false;
+      dotsStop = () => { stop(); c.remove(); };
+    }).catch(() => { c.remove(); });
   }
 
   function buildFilters(el, onChange) {
@@ -267,7 +491,7 @@ const App = (() => {
     const list = wrap.querySelector('#uni-list');
     for (const u of Store.sortedUnis()) {
       const card = h(`<div class="uni-card" style="cursor:pointer">
-        <span class="flag">${flag(u.country_code)}</span>
+        ${flagImg(u.country_code)}
         <span><span class="name">${esc(u.name)}</span><br/>
         <span class="meta">${esc(u.city)}, ${esc(u.country)} - ${esc((u.languages || []).join(', '))}</span></span>
         <span class="badge"><span class="num">${u.summary.matched}/${u.summary.total}</span><br/><span class="lbl">match</span></span>
@@ -296,7 +520,7 @@ const App = (() => {
             <div class="inside"><span class="num">${s.matched}/${s.total}</span><span class="lbl">subjects match</span></div>
           </div>
           <div>
-            <h2 style="font-size:20px">${flag(u.country_code)} ${esc(u.name)}</h2>
+            <h2 style="font-size:20px">${flagImg(u.country_code, 'inline-ico')} ${esc(u.name)}</h2>
             <p style="color:var(--text-2);margin:4px 0 0">${esc(u.city)}, ${esc(u.country)}<br/>${esc((u.languages || []).join(', '))}</p>
           </div>
         </div>
@@ -310,13 +534,13 @@ const App = (() => {
       </div>
     </div>`);
     const rows = wrap.querySelector('#rows');
-    const icons = { good: '\u2713', partial: '~', none: '\u00D7' };
+    const icons = { good: 'check', partial: 'arrow-right', none: 'x' };
     for (const m of u.matches) {
       const label = m.label[0].toUpperCase() + m.label.slice(1);
       const row = h(`<div class="match-row">
-        <div class="line1"><span>${esc(m.home_name)}</span><span class="arrow">\u2192</span>
+        <div class="line1"><span>${esc(m.home_name)}</span><span class="arrow">${icon('arrow-right', 'sm-ico')}</span>
           <span>${esc(m.partner_name || 'No partner course')}</span></div>
-        <div class="line2"><span class="pill ${m.label}">${icons[m.label]} ${label}</span>
+        <div class="line2"><span class="pill ${m.label}">${icon(icons[m.label], 'sm-ico')} ${label}</span>
           <span>${m.partner_ects ? m.partner_ects + ' ECTS' : ''}</span></div>
         <div class="explain" style="display:none">${esc(m.explanation || '')}${m.missing_topics && m.missing_topics.length ? '<br/>Missing: ' + esc(m.missing_topics.join(', ')) : ''}</div>
       </div>`);
@@ -352,7 +576,7 @@ const App = (() => {
         <span class="meta">${esc(u.city || '')} ${u.summary ? '- ' + u.summary.matched + '/' + u.summary.total + ' match' : ''}</span></span>
         <span style="margin-left:auto;display:flex;gap:8px">
           <button class="ghost" style="height:36px;padding:0 12px">Accepted</button>
-          <button class="ghost" data-remove style="height:36px;padding:0 12px" aria-label="remove">\u00D7</button>
+          <button class="icon-btn" data-remove aria-label="Remove from shortlist">${icon('trash-2', 'sm-ico')}</button>
         </span>
       </div>`);
       card.querySelector('[data-remove]').onclick = async () => { await Store.removeFromShortlist(s.id); render(); };
@@ -371,7 +595,7 @@ const App = (() => {
       <div class="sheet-grab"></div>
       <h2>I got accepted</h2>
       <div class="form-field"><label>University</label>
-        <select id="a-uni">${Store.state.universities.map(u => `<option value="${u.id}" ${u.id === u0 ? 'selected' : ''}>${esc(u.name)}</option>`).join('')}</select></div>
+        <div class="select-wrap"><select id="a-uni">${Store.state.universities.map(u => `<option value="${u.id}" ${u.id === u0 ? 'selected' : ''}>${esc(u.name)}</option>`).join('')}</select>${icon('chevron-down', 'sel-ico')}</div></div>
       <div class="form-field"><label>Start date</label><input id="a-start" type="date" /></div>
       <div class="form-field"><label>Arrival date (optional)</label><input id="a-arrival" type="date" /></div>
       <div class="form-field"><label>End date</label><input id="a-end" type="date" /></div>
@@ -446,11 +670,10 @@ const App = (() => {
       countNum = Math.max(1, Math.ceil((now - arrival) / 86400000));
       countText = `day of ${totalDays}`;
     } else {
-      countNum = '\u2713';
+      countNum = '\u221E';
       countText = 'Welcome back';
     }
     const next = Store.state.tasks.filter(t => !t.done).slice(0, 3);
-    const stages = ['before', 'arrival', 'during', 'before-return', 'after-return'];
     const pct = stage => {
       const ts = Store.state.tasks.filter(t => t.stage === stage);
       return ts.length ? Math.round(100 * ts.filter(t => t.done).length / ts.length) : 0;
@@ -474,9 +697,9 @@ const App = (() => {
       </div>
       <div class="card" style="margin-top:12px">
         <p class="section-label">Stage progress</p>
-        ${stages.map(st => `<p style="font-size:12px;color:var(--text-2);margin:8px 0 4px">${esc(stageLabel(st))}</p><div class="stage-progress"><div style="width:${pct(st)}%"></div></div>`).join('')}
+        ${STAGES.map(st => `<p style="font-size:12px;color:var(--text-2);margin:8px 0 4px">${esc(stageLabel(st))}</p><div class="stage-progress"><div style="width:${pct(st)}%"></div></div>`).join('')}
       </div>
-      <button class="primary" style="margin-top:16px" id="scan-btn">Scan a document</button>
+      <button class="primary" style="margin-top:16px" id="scan-btn">${icon('scan-line', 'inline-ico')} Scan a document</button>
     </div>`);
     wrap.querySelector('#scan-btn').onclick = () => go('scanJ');
     root.appendChild(wrap);
@@ -500,7 +723,7 @@ const App = (() => {
     const wrap = h(`<div class="screen panel" style="padding:88px 12px 0">
       <div class="card">
         <p class="section-label">Timeline</p>
-        ${['before', 'arrival', 'during', 'before-return', 'after-return'].map(st => {
+        ${STAGES.map(st => {
           const list = tasks.filter(t => t.stage === st);
           if (!list.length) return '';
           return `<p class="section-label" style="margin-top:16px">${esc(stageLabel(st))}</p>` + list.map(taskCard).join('');
@@ -535,7 +758,7 @@ const App = (() => {
     </div>`);
     wrap.querySelector('#do-scan').onclick = async () => {
       const res = wrap.querySelector('#scan-result');
-      res.innerHTML = '<div class="card"><p style="color:var(--text-2);margin:0">Reading your document…</p></div>';
+      res.innerHTML = '<div class="card"><p style="color:var(--text-2);margin:0">Reading your document...</p></div>';
       await new Promise(r => setTimeout(r, 1800));
       const doc = await Store.scan();
       if (!doc) { res.innerHTML = '<div class="card"><p style="color:var(--none);margin:0">Scanner unavailable. Try again later.</p></div>'; return; }
@@ -552,7 +775,7 @@ const App = (() => {
       <div class="card"><p class="section-label">Deadlines</p><div class="task-card"><span class="t-title">${esc(dl.text)}</span>
         <button class="ghost" data-dl="${esc(dl.title)}" style="height:32px;padding:0 10px;font-size:12px;flex-shrink:0">Add to timeline</button></div></div>
       <div class="card"><p class="section-label">Bring with you</p><ul>${r.bring.map(b => `<li>${esc(b)}</li>`).join('')}</ul></div>
-      <div class="card"><p class="section-label">Watch out</p><p style="margin:4px 0 0">\u26A0\uFE0F ${esc(r.watch_out)}</p></div>
+      <div class="card"><p class="section-label">Watch out</p><p style="margin:4px 0 0;display:flex;gap:6px;align-items:flex-start">${icon('triangle-alert', 'sm-ico warn')}<span>${esc(r.watch_out)}</span></p></div>
       <div class="card"><p class="section-label">Key words</p><p style="margin:4px 0 0">${r.keywords.map(k => `<span class="pill" style="color:var(--accent);margin:2px">${esc(k[0])} \u2192 ${esc(k[1])}</span>`).join(' ')}</p></div>`;
     }
 
@@ -561,7 +784,7 @@ const App = (() => {
         b.onclick = async () => {
           const due = new Date(Date.now() + ((r.deadlines[0].offset_days || 7) * 86400000)).toISOString().slice(0, 10);
           await Store.addTask(Store.state.mobility ? Store.state.mobility.id : null, b.dataset.dl, 'during', due);
-          b.textContent = 'Added \u2713';
+          b.textContent = 'Added';
           b.disabled = true;
           toast('Added to timeline');
         };
@@ -584,9 +807,9 @@ const App = (() => {
         <p class="section-label">Erasmus documents</p>
         ${docs.map(d => {
           const color = d[1] === 'signed' || d[1] === 'active' ? 'good' : 'none';
-          const ico = color === 'good' ? '\u2713' : '\u00D7';
+          const ico = color === 'good' ? 'check' : 'x';
           return `<div class="task-card"><span><span class="t-title">${esc(d[0])}</span>
-            <span class="t-meta"><span class="pill ${color}">${ico} ${esc(d[1])}</span></span></span></div>`;
+            <span class="t-meta"><span class="pill ${color}">${icon(ico, 'sm-ico')} ${esc(d[1])}</span></span></span></div>`;
         }).join('')}
       </div>
       ${scans.length ? `<div class="card" style="margin-top:12px"><p class="section-label">Scanned documents</p>
@@ -605,11 +828,6 @@ const App = (() => {
 
   /* ---------- helpers ---------- */
 
-  function flag(code) {
-    if (!code || code.length !== 2) return '\uD83C\uDF10';
-    return String.fromCodePoint(...[...code.toUpperCase()].map(c => 0x1f1e6 + c.charCodeAt(0) - 65));
-  }
-
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   }
@@ -618,12 +836,15 @@ const App = (() => {
     await Store.boot();
     Globe.init('globe', p => { if (p && p.id) { Store.state.activeUniId = p.id; go('uni'); } });
     await Globe.preload();
-    const screen = Store.state.mobility ? 'today' : 'welcome';
+    const { sessionEmail, seenLanding, mobility, mode } = Store.state;
+    const screen = sessionEmail
+      ? afterAuthScreen()
+      : (mobility && mode === 'journey' ? 'today' : (seenLanding ? 'profile' : 'landing'));
     Store.state.screen = screen;
     go(screen);
   }
 
-  return { start, go, render, toast };
+  return { start, go, render, toast, showFatal };
 })();
 
 App.start();

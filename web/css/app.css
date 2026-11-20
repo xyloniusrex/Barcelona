@@ -155,6 +155,128 @@ button.ghost {
 }
 .sheet h2 { font-size: 20px; margin-bottom: 12px; }
 
+/* Lucide graphics pack */
+.icon {
+  width: 20px;
+  height: 20px;
+  stroke: currentColor;
+  flex-shrink: 0;
+  display: block;
+}
+.sm-ico { width: 14px; height: 14px; display: inline-block; vertical-align: -2px; }
+.inline-ico { display: inline-block; vertical-align: -4px; margin-right: 6px; }
+.warn { color: var(--partial); vertical-align: -3px; }
+
+/* Landing */
+.landing {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100vh - 40px);
+  padding: 24px 20px;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: "Space Grotesk", Inter, sans-serif;
+  font-size: 22px;
+  font-weight: 600;
+}
+.brand .icon { width: 26px; height: 26px; color: var(--accent); }
+.landing .hero { margin-top: 72px; margin-bottom: 20px; }
+.landing h1 { font-size: 28px; line-height: 34px; font-weight: 600; }
+.slogan { color: var(--text-2); margin: 12px 0 0; }
+.features { display: flex; flex-direction: column; gap: 16px; margin: 20px 0 28px; }
+.feat { display: flex; gap: 12px; align-items: flex-start; }
+.feat > .icon { color: var(--accent); margin-top: 1px; }
+.feat .f-title { display: block; font-weight: 500; }
+.feat .f-sub, .updates .f-title { font-size: 13px; color: var(--text-2); }
+.feat .f-sub { display: block; }
+.updates { margin-top: 24px; }
+.updates-row { display: flex; gap: 8px; margin-top: 8px; }
+.updates-row input {
+  flex: 1;
+  height: 44px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-btn);
+  color: var(--text);
+  padding: 0 12px;
+  font: inherit;
+}
+.icon-btn {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-2);
+  flex-shrink: 0;
+}
+.icon-btn .icon { width: 16px; height: 16px; }
+.hint { color: var(--text-3); font-size: 13px; margin: 0 0 12px; }
+
+/* Dropdowns with chevron */
+.select-wrap { position: relative; }
+.select-wrap select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 40px;
+}
+.select-wrap .sel-ico {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  color: var(--text-2);
+  width: 16px;
+  height: 16px;
+}
+
+/* Document rows */
+.doc-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.doc-row:last-child { border-bottom: 0; }
+.doc-row .doc-ico { color: var(--text-2); }
+.doc-name { font-weight: 500; }
+.doc-meta { font-size: 12px; color: var(--text-2); }
+
+/* Fatal error boundary */
+.fatal h2 { font-size: 20px; margin: 0 0 8px; }
+.fatal pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 11px;
+  color: var(--text-3);
+  max-height: 120px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px;
+  margin: 0 0 12px;
+}
+
+/* Python-rendered dots layer over the globe (map screen) */
+.dots-layer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  background: transparent;
+  pointer-events: none;
+  z-index: 1;
+  width: min(480px, 100vw);
+  height: auto;
+}
+
 /* University cards */
 .uni-card {
   display: flex;
@@ -162,7 +284,16 @@ button.ghost {
   gap: 12px;
   margin-bottom: 12px;
 }
-.uni-card .flag { font-size: 22px; }
+img.flag {
+  width: 22px;
+  height: 16px;
+  border-radius: 3px;
+  object-fit: cover;
+  flex-shrink: 0;
+  display: inline-block;
+}
+img.flag.inline-ico { vertical-align: -2px; }
+#bottomNav button .ico .icon { width: 20px; height: 20px; }
 .uni-card .name { font-weight: 600; }
 .uni-card .meta { font-size: 13px; color: var(--text-2); }
 .badge {

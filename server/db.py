@@ -91,6 +91,15 @@ CREATE TABLE IF NOT EXISTS scanned_docs (
     result_json TEXT NOT NULL,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+CREATE TABLE IF NOT EXISTS user_docs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT NOT NULL REFERENCES users(id),
+    doc_type TEXT NOT NULL,
+    file_name TEXT NOT NULL,
+    size INTEGER NOT NULL DEFAULT 0,
+    uploaded_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE (user_id, doc_type)
+);
 CREATE TABLE IF NOT EXISTS signups (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     email TEXT NOT NULL,

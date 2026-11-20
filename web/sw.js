@@ -8,14 +8,16 @@
  *    scans) so journeys still open offline.
  *  - never cached: writes (POST/PATCH/DELETE).
  */
-const VERSION = 'poligo-v1';
+const VERSION = 'poligo-v2';
 const SHELL = VERSION + '-shell';
 const DATA = VERSION + '-data';
 
 const PRECACHE = [
   '/', '/index.html', '/css/app.css',
-  '/js/store.js', '/js/globe.js', '/js/anim.js', '/js/app.js',
+  '/js/icons.js', '/js/store.js', '/js/globe.js', '/js/anim.js', '/js/app.js',
   '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png',
+  '/icons/flags/at.svg', '/icons/flags/pt.svg', '/icons/flags/be.svg',
+  '/icons/flags/lv.svg', '/icons/flags/ro.svg',
   '/data/countries-110m.geojson',
 ];
 

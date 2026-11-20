@@ -302,6 +302,57 @@ def signup(s: SignupIn):
     return {"ok": True}
 
 
+class UserDocIn(BaseModel):
+    user_id: str
+    doc_type: str
+    file_name: str
+    size: int = 0
+
+
+@app.get("/api/user-docs")
+def user_docs(user_id: str):
+    with db() as conn:
+        rows = conn.execute(
+            "SELECT * FROM user_docs WHERE user_id = ? ORDER BY uploaded_at", (user_id,)
+        ).fetchall()
+        return {"docs": [job(r) for r in rows]}
+
+
+@app.post("/api/user-docs")
+def add_user_doc(doc: UserDocIn):
+    """Identity documents: only the record (type/name/size) is stored here.
+    The file itself never leaves the user's device - it lives in IndexedDB,
+    so the server holds no sensitive personal documents."""
+    with db() as conn:
+        conn.execute(
+            "INSERT OR REPLACE INTO user_docs (user_id, doc_type, file_name, size) VALUES (?,?,?,?)",
+            (doc.user_id, doc.doc_type, doc.file_name, doc.size),
+        )
+        row = conn.execute(
+            "SELECT * FROM user_docs WHERE user_id = ? AND doc_type = ?",
+            (doc.user_id, doc.doc_type),
+        ).fetchone()
+    return job(row)
+
+
+@app.delete("/api/user-docs/{doc_id}")
+def delete_user_doc(doc_id: int, user_id: str):
+    with db() as conn:
+        conn.execute("DELETE FROM user_docs WHERE id = ? AND user_id = ?", (doc_id, user_id))
+    return {"ok": True}
+
+
+@app.get("/api/users/by-email/{email}")
+def get_user_by_email(email: str):
+    with db() as conn:
+        row = conn.execute(
+            "SELECT * FROM users WHERE email = ? ORDER BY created_at LIMIT 1", (email,)
+        ).fetchone()
+    if not row:
+        raise HTTPException(404, "no account for this email")
+    return job(row)
+
+
 @app.get("/api/health")
 def health():
     return {"ok": True, "service": "poligo"}
