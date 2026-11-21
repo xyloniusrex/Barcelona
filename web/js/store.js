@@ -68,7 +68,7 @@ const Store = (() => {
 
   function authHeaders() {
     const h = { 'Content-Type': 'application/json' };
-    if (state.sessionToken) h['Authorization'] = 'Bearer ' + state.sessionToken;
+    if (state.sessionToken) h['Authorization'] = 'Bearer ' + cleanToken(state.sessionToken);
     return h;
   }
 
@@ -379,6 +379,13 @@ const Store = (() => {
 
   /* ---------- admin calls (bearer = admin token, not user session) ---------- */
 
+  // HTTP header values are ByteStrings: bytes 0-255 only. Pasted tokens can
+  // pick up non-ASCII glyphs (e.g. the return symbol from a terminal copy);
+  // strip anything that would make fetch throw instead of failing silently.
+  function cleanToken(t) {
+    return String(t || '').replace(/[^\x20-\x7E]/g, '').trim();
+  }
+
   function adminApi(path, opts, token) {
     const headers = Object.assign({ 'Content-Type': 'application/json' }, opts && opts.headers);
     if (token) headers['Authorization'] = 'Bearer ' + token;
@@ -397,9 +404,9 @@ const Store = (() => {
 
   const ADMIN_TOKEN_KEY = 'poligo-admin-token';
 
-  function getAdminToken() { try { return localStorage.getItem(ADMIN_TOKEN_KEY) || ''; } catch (e) { return ''; } }
+  function getAdminToken() { try { return cleanToken(localStorage.getItem(ADMIN_TOKEN_KEY) || ''); } catch (e) { return ''; } }
 
-  function setAdminToken(token) { try { if (token) localStorage.setItem(ADMIN_TOKEN_KEY, token); else localStorage.removeItem(ADMIN_TOKEN_KEY); } catch (e) {} }
+  function setAdminToken(token) { try { token = cleanToken(token); if (token) localStorage.setItem(ADMIN_TOKEN_KEY, token); else localStorage.removeItem(ADMIN_TOKEN_KEY); } catch (e) {} }
 
   return {
     state, boot, saveProfile, saveLocal, uniById, score, sortedUnis,
