@@ -8,12 +8,12 @@
  *    scans) so journeys still open offline.
  *  - never cached: writes (POST/PATCH/DELETE).
  */
-const VERSION = 'poligo-v3';
+const VERSION = 'poligo-v4';
 const SHELL = VERSION + '-shell';
 const DATA = VERSION + '-data';
 
 const PRECACHE = [
-  '/', '/index.html', '/css/app.css',
+  '/', '/index.html', '/styles/app.css',
   '/js/icons.js', '/js/store.js', '/js/anim.js', '/js/app.js',
   '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png',
 ];
@@ -37,7 +37,7 @@ self.addEventListener('fetch', e => {
 
   // animation clips + immutable static assets: cache-first
   if (url.pathname.startsWith('/anim/') || url.pathname.startsWith('/icons/') ||
-      url.pathname.startsWith('/data/') || url.pathname.startsWith('/css/') ||
+      url.pathname.startsWith('/data/') || url.pathname.startsWith('/styles/') ||
       url.pathname.startsWith('/js/') || url.pathname === '/' || url.pathname === '/index.html') {
     e.respondWith(cacheFirst(req, SHELL));
     return;
