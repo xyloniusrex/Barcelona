@@ -23,7 +23,7 @@ const App = (() => {
   };
   const NAV_SCREENS = new Set([].concat(NAVS.explore, NAVS.journey).map(n => n[0]));
   const KNOWN = new Set([].concat(
-    ['landing', 'auth', 'onboarding', 'docsSetup', 'uni', 'subjects', 'scanJ'],
+    ['landing', 'auth', 'onboarding', 'docsSetup', 'uni', 'subjects', 'scanJ', 'admin'],
     [].concat(NAVS.explore, NAVS.journey).map(n => n[0])
   ));
   const STAGES = ['before', 'arrival', 'during', 'before-return', 'after-return'];
@@ -157,7 +157,7 @@ const App = (() => {
         map: viewMap, universities: viewUniversities, uni: viewUniversity,
         shortlist: viewShortlist, today: viewToday,
         calendar: viewCalendar, timeline: viewTimeline,
-        scanJ: viewScan, docs: viewDocs,
+        scanJ: viewScan, docs: viewDocs, admin: viewAdmin,
       };
       $app.innerHTML = '';
       (views[screen] || viewLanding)($app);
@@ -678,6 +678,12 @@ const App = (() => {
       '<button class="ghost" id="redo-onb" style="width:100%">[ REDO SETUP ]</button>' +
       '</div>' +
       '<div class="card" style="margin-top:12px">' +
+      '<p class="section-label">MESSAGES</p>' +
+      '<div id="inbox-list"><p class="hint" style="margin:0 0 8px">loading messages...</p></div>' +
+      '<div class="form-field"><textarea id="inbox-reply" rows="2" placeholder="reply to the admins..."></textarea></div>' +
+      '<button class="ghost" id="inbox-send" style="width:100%">[ SEND ]</button>' +
+      '</div>' +
+      '<div class="card" style="margin-top:12px">' +
       '<p class="section-label">ACCOUNT</p>' +
       '<div class="doc-row">' +
       '<span class="doc-ico">' + icon('user') + '</span>' +
@@ -703,6 +709,22 @@ const App = (() => {
       }
     })();
 
+    (async () => {
+      const box = wrap.querySelector('#inbox-list');
+      const inbox = await Store.getInbox();
+      if (!inbox.messages.length) {
+        box.innerHTML = '<p class="hint" style="margin:0 0 8px">no messages yet. admin notices appear here.</p>';
+        return;
+      }
+      box.innerHTML = inbox.messages.map(m =>
+        '<div class="doc-row"><span class="doc-ico">' + icon('info') + '</span>' +
+        '<span style="flex:1;min-width:0"><span class="doc-name">' + (m.from_admin ? 'ADMIN' : 'YOU') +
+        (m.read || !m.from_admin ? '' : ' <span class="badge due">NEW</span>') + '</span>' +
+        '<span class="doc-meta">' + esc(m.ts) + '</span><br/>' + esc(m.text) + '</span></div>'
+      ).join('');
+    })();
+    Store.markInboxRead();
+
     wrap.querySelector('#save-profile').onclick = async () => {
       await Store.saveProfile({
         faculty: wrap.querySelector('#f-faculty').value,
@@ -720,6 +742,17 @@ const App = (() => {
       render();
     };
     wrap.querySelector('#redo-onb').onclick = () => go('onboarding');
+    wrap.querySelector('#inbox-send').onclick = async () => {
+      const ta = wrap.querySelector('#inbox-reply');
+      const text = ta.value.trim();
+      if (!text) { toast('nothing to send'); return; }
+      try {
+        await Store.replyInbox(text);
+        ta.value = '';
+        toast('sent to admins');
+        render();
+      } catch (e) { toast((e.code ? e.code + ': ' : '') + e.message); }
+    };
     const logoutBtn = wrap.querySelector('#logout');
     if (logoutBtn) logoutBtn.onclick = async () => { await Store.logout(); history.length = 0; go('landing', { replace: true }); };
     const authBtn = wrap.querySelector('#go-auth');
@@ -1272,6 +1305,94 @@ const App = (() => {
       Store.saveLocal();
       go('map', { replace: true });
     };
+    root.appendChild(wrap);
+  }
+
+
+  /* ---------- admin (bare-minimum: logs, sessions, uptime, errors, messages) ---------- */
+
+  function viewAdmin(root) {
+    let token = Store.getAdminToken();
+    let tab = 'summary';
+    const wrap = h('<div class="screen panel" style="padding:88px 12px 0">' +
+      '<div class="card">' +
+      '<p class="section-label">ADMIN</p>' +
+      '<div class="form-field" id="ad-token-row"><label>Admin token</label>' +
+      '<input id="ad-token" type="password" placeholder="content of data/admin_token.txt inside the container" /></div>' +
+      '<div class="scan-cards">' +
+      '<button class="ghost" data-tab="summary">[ SUMMARY ]</button>' +
+      '<button class="ghost" data-tab="logs">[ LOGS ]</button>' +
+      '<button class="ghost" data-tab="messages">[ MESSAGES ]</button>' +
+      '</div>' +
+      '<div id="ad-body"></div>' +
+      '<button class="link" id="ad-back">Back</button>' +
+      '</div></div>');
+    const body = wrap.querySelector('#ad-body');
+    const tokenRow = wrap.querySelector('#ad-token-row');
+    const tokenInput = wrap.querySelector('#ad-token');
+    tokenInput.value = token;
+
+    const getTok = () => tokenInput.value.replace(/[^\x20-\x7E]/g, '').trim();
+
+    async function load() {
+      const tok = getTok();
+      if (!tok) { body.innerHTML = '<p class="hint">enter the admin token - run: docker compose exec poligo cat /app/data/admin_token.txt</p>'; return; }
+      Store.setAdminToken(tok);
+      body.innerHTML = '<p class="hint">loading...</p>';
+      try {
+        if (tab === 'summary') {
+          const out = await Store.adminApi('/api/admin/summary', {}, tok);
+          const c = out.counts || {};
+          body.innerHTML =
+            '<p class="meta">UPTIME: ' + esc(out.uptime) + '</p>' +
+            '<p class="meta">USERS: ' + c.users + ' / SESSIONS: ' + c.sessions + ' / DOCS: ' + c.user_docs + ' / MOBILITIES: ' + c.mobilities + '</p>' +
+            '<p class="meta">ERRORS 24H: ' + c.errors_24h + ' / WARN 24H: ' + c.warn_24h + '</p>' +
+            '<p class="meta">LAST ERASMUS SCAN: ' + (out.last_scan ? esc(out.last_scan.run_at) + ' - ' + out.last_scan.count + ' OPPORTUNITIES' : 'none') + '</p>' +
+            (out.last_scan && out.last_scan.opportunities ? out.last_scan.opportunities.slice(0, 8).map(o =>
+              '<div class="doc-row"><span style="flex:1;min-width:0"><span class="doc-name">' + esc(o.title) +
+              (o.is_new ? ' <span class="badge due">NEW</span>' : '') + '</span><br/>' +
+              '<span class="doc-meta">ECTS match ' + Math.round(o.score * 100) + '% (' + o.ects_matched + '/' + o.courses + ' courses)</span></span></div>').join('') : '') +
+            '<p class="section-label" style="margin-top:10px">RECENT SIGN-INS</p>' +
+            ((out.recent_signins || []).map(r => '<p class="meta">' + esc(r.ts) + ' - ' + esc(String(r.user_id).slice(0, 8)) + ' - ' + esc(r.event) + '</p>').join('') || '<p class="meta">none</p>');
+        } else if (tab === 'logs') {
+          const out = await Store.adminApi('/api/admin/logs?limit=200', {}, tok);
+          body.innerHTML = (out.logs || []).map(l =>
+            '<p class="meta log-' + esc(l.level.toLowerCase()) + '">' + esc(l.ts) + ' [' + esc(l.level) + ' ' + esc(l.category) + '] ' +
+            esc(l.event) + (l.detail ? ' - ' + l.detail.slice(0, 300) : '') + '</p>'
+          ).join('') || '<p class="meta">no log lines</p>';
+        } else {
+          const out = await Store.adminApi('/api/admin/messages', {}, tok);
+          body.innerHTML =
+            '<div class="form-field"><textarea id="ad-msg" rows="2" placeholder="message text..."></textarea></div>' +
+            '<div class="form-field"><input id="ad-to" placeholder="to user id (empty = broadcast to all)" /></div>' +
+            '<button class="ghost" id="ad-send" style="width:100%">[ SEND ]</button>' +
+            '<p class="section-label" style="margin-top:10px">HISTORY</p>' +
+            ((out.messages || []).map(m =>
+              '<p class="meta">' + esc(m.ts) + (m.from_admin ? ' [ADMIN] to ' + esc(m.to_email || m.to_user || 'ALL') : ' [USER ' + esc(String(m.from_user).slice(0, 8)) + ']') + ': ' + esc(m.text) + '</p>'
+            ).join('') || '<p class="meta">no messages</p>');
+          body.querySelector('#ad-send').onclick = async () => {
+            try {
+              await Store.adminApi('/api/admin/messages', {
+                method: 'POST',
+                body: JSON.stringify({ text: body.querySelector('#ad-msg').value, to_user: body.querySelector('#ad-to').value.trim() || null }),
+              }, getTok());
+              toast('message sent');
+              load();
+            } catch (e) { body.insertAdjacentHTML('afterbegin', '<p class="meta log-error">' + esc((e.code || 'ERR') + ': ' + e.message) + '</p>'); }
+          };
+        }
+      } catch (e) {
+        body.innerHTML = '<p class="meta log-error">' + esc((e.code || 'ERR') + ': ' + e.message) + '</p>';
+      }
+    }
+
+    tokenRow.addEventListener('change', load);
+    wrap.querySelectorAll('[data-tab]').forEach(b => {
+      b.onclick = () => { tab = b.dataset.tab; load(); };
+    });
+    wrap.querySelector('#ad-back').onclick = () => goBack();
+    if (token) load();
+    else body.innerHTML = '<p class="hint">enter the admin token - run: docker compose exec poligo cat /app/data/admin_token.txt</p>';
     root.appendChild(wrap);
   }
 

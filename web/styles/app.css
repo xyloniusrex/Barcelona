@@ -317,6 +317,46 @@ button:disabled { color: var(--text-3); border-color: var(--border); cursor: def
 #toast.show { opacity: 1; }
 #toast::before { content: "> "; color: var(--accent-live); }
 
+/* ---------- summonable terminal ---------- */
+#term {
+  position: fixed;
+  left: 0; right: 0;
+  bottom: 0;
+  max-height: 55vh;
+  background: var(--bg);
+  border-top: 2px solid var(--accent-live);
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  font-size: 12px;
+}
+#term[hidden] { display: none; }
+.term-out {
+  overflow-y: auto;
+  padding: 8px 10px 0;
+  flex: 1;
+}
+.term-out p { margin: 0 0 2px; white-space: pre-wrap; word-break: break-word; }
+.term-echo { color: var(--text-3); }
+.term-err { color: var(--none); }
+.term-in-row { display: flex; align-items: center; gap: 8px; padding: 8px 10px; }
+.term-prompt { color: var(--accent-live); }
+.term-in-row input {
+  flex: 1;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  padding: 4px 0;
+}
+.term-hint { color: var(--text-3); padding: 0 10px 8px; font-size: 10px; }
+
+.log-info { color: var(--text-2); }
+.log-warn { color: var(--partial); }
+.log-error { color: var(--none); }
+.sel-ico { position: absolute; right: 8px; width: 16px; height: 16px; color: var(--text-2); pointer-events: none; }
+.sm-ico { width: 14px; height: 14px; vertical-align: -2px; }
+.select-wrap { position: relative; }
+
 /* ---------- python-rendered animation overlay ---------- */
 .anim-overlay {
   position: fixed;
