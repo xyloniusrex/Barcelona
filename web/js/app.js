@@ -467,7 +467,7 @@ const App = (() => {
   function syncStage() {
     const st = Store.state;
     const id = st.mode === 'journey' && st.mobility ? st.mobility.university_id
-      : st.pending ? st.pending.university_id : st.activeUniId;
+      : st.pendings[0] ? st.pendings[0].university_id : st.activeUniId;
     Stage.setDestination(id ? Store.uniById(id) : null);
   }
 
@@ -769,28 +769,39 @@ const App = (() => {
 
   /* ----------------------------------------------------------------- home */
 
+  // One card per pending application - a student can apply to more than one
+  // university while waiting to hear back, so this is a list, not a single slot.
+  function pendingCardHtml(p) {
+    const u = Store.uniById(p.university_id);
+    if (!u) return '';
+    return '<div class="card home-info">' +
+      '<div class="route">' +
+      '<span class="route-city">' + flagImg('RO') + '<b>Timișoara</b></span>' +
+      '<span class="route-arrow">' + icon('arrow-right') + '</span>' +
+      '<span class="route-city">' + flagImg(u.country_code) + '<b>' + esc(u.city) + '</b></span>' +
+      '</div>' +
+      '<p class="hint route-sub">' + esc(u.name) + ' - ' + esc(T(u.country)) +
+      '<br/>' + esc(fmtDate(p.start_date)) + ' - ' + esc(fmtDate(p.end_date)) + '</p>' +
+      '<p class="pending-pill"><span class="pill partial">' + icon('clock', 'sm-ico') + ' ' + esc(T('Waiting for approval')) + '</span></p>' +
+      '<div class="home-actions"><button class="ghost" data-withdraw="' + esc(p.id) + '">' + esc(T('Withdraw')) + '</button></div>' +
+      '</div>';
+  }
+
   function viewHome(root) {
     const st = Store.state;
     const mob = st.mode === 'journey' ? st.mobility : null;
-    const pend = !mob && st.pending ? st.pending : null;
+    const pends = mob ? [] : (st.pendings || []).filter(p => Store.uniById(p.university_id));
     const uni = mob ? Store.uniById(mob.university_id)
-      : pend ? Store.uniById(pend.university_id)
+      : pends[0] ? Store.uniById(pends[0].university_id)
       : (st.activeUniId ? Store.uniById(st.activeUniId) : null);
 
     let info;
-    if (pend && uni) {
-      info = '<div class="card home-info">' +
-        '<div class="route">' +
-        '<span class="route-city">' + flagImg('RO') + '<b>Timișoara</b></span>' +
-        '<span class="route-arrow">' + icon('arrow-right') + '</span>' +
-        '<span class="route-city">' + flagImg(uni.country_code) + '<b>' + esc(uni.city) + '</b></span>' +
-        '</div>' +
-        '<p class="hint route-sub">' + esc(uni.name) + ' - ' + esc(T(uni.country)) +
-        '<br/>' + esc(fmtDate(pend.start_date)) + ' - ' + esc(fmtDate(pend.end_date)) + '</p>' +
-        '<p class="pending-pill"><span class="pill partial">' + icon('clock', 'sm-ico') + ' ' + esc(T('Waiting for approval')) + '</span></p>' +
-        '<p class="hint">' + esc(T('The Erasmus office has to confirm your acceptance. Your journey (steps, countdown, documents) opens as soon as it is approved.')) + '</p>' +
+    if (pends.length) {
+      info = pends.map(pendingCardHtml).join('') +
+        '<div class="card home-info">' +
+        '<p class="hint">' + esc(T('The Erasmus office has to confirm an acceptance before that journey (steps, countdown, documents) opens. You can apply to more than one and choose once you hear back.')) + '</p>' +
         '<div class="home-actions"><button class="primary" id="h-check">' + esc(T('Check again')) + '</button>' +
-        '<button class="ghost" id="h-change">' + esc(T('Choose another')) + '</button></div>' +
+        '<button class="ghost" id="h-change">' + esc(T('Apply to another')) + '</button></div>' +
         '</div>';
     } else if (uni) {
       info = '<div class="card home-info">' +
@@ -825,28 +836,36 @@ const App = (() => {
     bind('#h-change', () => go('map'));
     bind('#h-browse', () => go('map'));
     bind('#h-check', () => checkApproval(false));
+    wrap.querySelectorAll('[data-withdraw]').forEach(btn => {
+      btn.onclick = async () => {
+        btn.disabled = true;
+        try { await Store.withdrawApplication(btn.dataset.withdraw); toast(T('Application withdrawn.')); render(); }
+        catch (e) { toast(errText(e)); btn.disabled = false; }
+      };
+    });
     if (mob) startCountdown(wrap);
-    if (pend) startTimer(() => checkApproval(true), 30000);   // approval shows up on its own
+    if (pends.length) startTimer(() => checkApproval(true), 30000);   // approval shows up on its own
 
     Stage.homeGlobe(wrap.querySelector('#home-globe'), uni, id => { st.activeUniId = id; go('uni'); });
     root.appendChild(wrap);
   }
 
-  // Has an admin approved the pending mobility? quiet = background poll (no toast).
+  // Has an admin approved one of the pending mobilities? quiet = background poll (no toast).
   let checking = false;
   async function checkApproval(quiet) {
     if (checking) return;
     checking = true;
+    const before = (Store.state.pendings || []).length;
     try {
       await Store.refresh();
       const st = Store.state;
-      if (st.mode === 'journey' && st.mobility && !st.pending) {
+      if (st.mode === 'journey' && st.mobility && !st.pendings.length) {
         tlOpen = null;
         go('home', { replace: true, force: true });
         await showIntro();
-      } else if (!st.pending) {
+      } else if (st.pendings.length < before) {
         render();
-        if (!quiet) toast(T('Your request was not approved. Check your messages in Profile.'));
+        if (!quiet) toast(T('One of your requests was not approved. Check your messages in Profile.'));
       } else if (!quiet) {
         toast(T('Still waiting for approval'));
       }

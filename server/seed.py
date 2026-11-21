@@ -101,6 +101,8 @@ PARTNER_COURSES = [
 import hashlib as _hashlib
 
 # (country, ISO 3166-1 alpha-2, approx lat, approx lng, primary language)
+# Kept disjoint from the real partners' countries above, so the demo spread
+# covers new ground on the globe instead of piling dots on the same spots.
 _DEMO_COUNTRIES = [
     ("France", "FR", 47.0, 2.3, "French"),
     ("Italy", "IT", 43.5, 11.9, "Italian"),
@@ -119,13 +121,27 @@ _DEMO_COUNTRIES = [
     ("Ireland", "IE", 53.3, -7.8, "Irish"),
     ("Lithuania", "LT", 55.3, 23.9, "Lithuanian"),
     ("Estonia", "EE", 58.7, 25.1, "Estonian"),
+    ("United Kingdom", "GB", 54.0, -2.0, "English"),
+    ("Switzerland", "CH", 46.8, 8.2, "German"),
+    ("Iceland", "IS", 64.9, -19.0, "Icelandic"),
+    ("Malta", "MT", 35.9, 14.4, "Maltese"),
+    ("Cyprus", "CY", 35.1, 33.4, "Greek"),
+    ("Luxembourg", "LU", 49.8, 6.1, "French"),
+    ("Turkey", "TR", 38.9, 35.2, "Turkish"),
+    ("Montenegro", "ME", 42.7, 19.3, "Montenegrin"),
+    ("North Macedonia", "MK", 41.6, 21.7, "Macedonian"),
+    ("Albania", "AL", 41.0, 20.0, "Albanian"),
+    ("Bosnia and Herzegovina", "BA", 43.9, 17.7, "Bosnian"),
 ]
 _DEMO_NAME_PATTERNS = [
     "Institute of Applied Sciences", "Polytechnic University",
     "University of Technology", "School of Engineering and Informatics",
+    "Institute of Information Technology", "College of Engineering",
+    "University of Applied Sciences", "National Technical University",
+    "Institute for Digital Innovation",
 ]
-_DEMO_CITY_PREFIXES = ["North", "East", "West", "South", "New", "Upper", "Lower"]
-_DEMO_CITY_ROOTS = ["brook", "field", "haven", "ford", "mont", "vale", "wick", "burg"]
+_DEMO_CITY_PREFIXES = ["North", "East", "West", "South", "New", "Upper", "Lower", "Great", "Little", "Old", "Fair"]
+_DEMO_CITY_ROOTS = ["brook", "field", "haven", "ford", "mont", "vale", "wick", "burg", "dale", "bridge", "holm", "stead", "gate", "cross"]
 
 
 def _demo_pick(seq, *salt):
@@ -133,7 +149,7 @@ def _demo_pick(seq, *salt):
     return seq[int(digest, 16) % len(seq)]
 
 
-def _generate_fictional_universities(count=52):
+def _generate_fictional_universities(count=168):
     """Deterministic (same output every run, nothing random) so the demo
     data does not shuffle around between server restarts.
 
@@ -156,7 +172,7 @@ def _generate_fictional_universities(count=52):
         name = f"{city} {_demo_pick(_DEMO_NAME_PATTERNS, uid, 'name')} (fictional - demo only)"
         unis.append({
             "id": uid, "name": name, "city": city, "country": country, "country_code": code,
-            "lat": lat, "lng": lng, "languages": [lang, "English"],
+            "lat": lat, "lng": lng, "languages": [lang] if lang == "English" else [lang, "English"],
             "website": f"https://example.com/{uid}", "greeting": "Safe travels!",
         })
 

@@ -203,10 +203,11 @@ def get_user(uid: str):
             "SELECT * FROM mobilities WHERE user_id = ? AND status = 'active' ORDER BY created_at DESC", (uid,)
         ).fetchone()
         d["mobility"] = job(mob)
-        pending = conn.execute(
-            "SELECT * FROM mobilities WHERE user_id = ? AND status = 'pending' ORDER BY created_at DESC", (uid,)
-        ).fetchone()
-        d["pending"] = job(pending)
+        d["pendings"] = [
+            job(r) for r in conn.execute(
+                "SELECT * FROM mobilities WHERE user_id = ? AND status = 'pending' ORDER BY created_at DESC", (uid,)
+            )
+        ]
         return d
 
 
@@ -363,13 +364,21 @@ def _tasks_from_template(mobility_id, start, arrival, end):
 def accepted(payload: AcceptedIn, request: Request):
     """The student says they were accepted. The mobility starts as 'pending':
     the journey (timeline, intro, countdown) opens only after an admin approves
-    it in the admin panel (POST /api/admin/approvals/{id})."""
+    it in the admin panel (POST /api/admin/approvals/{id}). Several applications
+    can be pending at once - a student can apply to more than one university
+    while waiting to hear back - so this only blocks an exact duplicate."""
     arrival = payload.arrival_date or (date.fromisoformat(payload.start_date) - timedelta(days=3)).isoformat()
     mid = str(uuid.uuid4())
     with db() as conn:
         _require_session(request, conn, payload.user_id)
         _get_user(conn, payload.user_id)
-        conn.execute("UPDATE mobilities SET status = 'withdrawn' WHERE user_id = ? AND status = 'pending'", (payload.user_id,))
+        dup = conn.execute(
+            "SELECT * FROM mobilities WHERE user_id = ? AND university_id = ? AND status IN ('pending', 'active')",
+            (payload.user_id, payload.university_id),
+        ).fetchone()
+        if dup:
+            tasks = [job(r) for r in conn.execute("SELECT * FROM tasks WHERE mobility_id = ? ORDER BY due_date", (dup["id"],))]
+            return {"mobility": job(dup), "tasks": tasks}
         conn.execute(
             "INSERT INTO mobilities (id, user_id, university_id, start_date, arrival_date, end_date, status) VALUES (?,?,?,?,?,?, 'pending')",
             (mid, payload.user_id, payload.university_id, payload.start_date, arrival, payload.end_date),
@@ -393,6 +402,26 @@ def get_mobility(mobility_id: str):
             raise HTTPException(404, {"error": "ERR_NO_MOBILITY", "message": "unknown mobility"})
         tasks = [job(r) for r in conn.execute("SELECT * FROM tasks WHERE mobility_id = ? ORDER BY due_date", (mobility_id,))]
         return {"mobility": job(mob), "tasks": tasks}
+
+
+class UserIdIn(BaseModel):
+    user_id: str
+
+
+@app.post("/api/mobilities/{mobility_id}/withdraw")
+def withdraw_mobility(mobility_id: str, payload: UserIdIn, request: Request):
+    """Lets a student pull back one of their own pending applications - e.g.
+    once they decide which of several offers to go with."""
+    with db() as conn:
+        _require_session(request, conn, payload.user_id)
+        mob = conn.execute(
+            "SELECT * FROM mobilities WHERE id = ? AND user_id = ? AND status = 'pending'", (mobility_id, payload.user_id)
+        ).fetchone()
+        if not mob:
+            raise HTTPException(404, {"error": "ERR_NO_MOBILITY", "message": "no pending application with this id"})
+        conn.execute("UPDATE mobilities SET status = 'withdrawn' WHERE id = ?", (mobility_id,))
+        logsmod.log_event("INFO", "user", f"withdrew application at {mob['university_id']}", user_id=payload.user_id, conn=conn)
+    return {"ok": True}
 
 
 class TaskIn(BaseModel):
@@ -681,6 +710,11 @@ def admin_approve(mobility_id: str, payload: ApprovalIn, request: Request):
         if payload.approve:
             conn.execute("UPDATE mobilities SET status = 'archived' WHERE user_id = ? AND status = 'active'", (uid,))
             conn.execute("UPDATE mobilities SET status = 'active' WHERE id = ?", (mobility_id,))
+            # one exchange at a time: committing to this offer withdraws the others
+            conn.execute(
+                "UPDATE mobilities SET status = 'withdrawn' WHERE user_id = ? AND status = 'pending' AND id != ?",
+                (uid, mobility_id),
+            )
             conn.execute("UPDATE users SET mode = 'journey' WHERE id = ?", (uid,))
             text = f"Your mobility at {uni_name} was approved. Your journey starts now!"
         else:
