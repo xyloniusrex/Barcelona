@@ -6,41 +6,10 @@ the heavy work runs exactly once per language and the saved result is reused.
 The prototype ships Romanian; other languages fall back to English keys.
 """
 from server.db import db
+from server.i18n_ro import RO
 
-# canonical keys are the English UI strings
-TRANSLATIONS = {
-    "ro": {
-        "Map": "Harta",
-        "Universities": "Universități",
-        "Shortlist": "Lista scurtă",
-        "Profile": "Profil",
-        "Today": "Astăzi",
-        "Calendar": "Calendar",
-        "Timeline": "Planificare",
-        "Documents": "Documente",
-        "Create account": "Creează cont",
-        "Log in": "Autentificare",
-        "Explore without an account": "Explorează fără cont",
-        "Get notified at launch": "Anunță-mă la lansare",
-        "Email": "Email",
-        "Continue": "Continuă",
-        "Back": "Înapoi",
-        "Sign in or create an account": "Autentificare sau cont nou",
-        "Your documents": "Documentele tale",
-        "Language": "Limbă",
-        "Theme": "Temă",
-        "Dark": "Întunecată",
-        "Light": "Luminoasă",
-        "Remove document": "Șterge documentul",
-        "Upload a copy": "Încarcă o copie",
-        "Add manually": "Adaugă manual",
-        "Available": "Disponibil",
-        "Away": "Plecat",
-        "Deadlines": "Termene limită",
-        "days to departure": "zile până la plecare",
-        "day of": "ziua din",
-    },
-}
+# canonical keys are the English UI strings; the Romanian table lives in i18n_ro.py
+TRANSLATIONS = {"ro": RO}
 
 
 def ensure_language(lang):
@@ -52,11 +21,13 @@ def ensure_language(lang):
         have = {r["key"]: r["text"] for r in conn.execute(
             "SELECT key, text FROM translations WHERE lang = ?", (lang,)
         ).fetchall()}
-        missing = {k: t for k, t in table.items() if k not in have}
-        if missing:
+        # insert new keys AND refresh any saved text that changed in the table, so
+        # an improved translation reaches databases created by older versions
+        changed = {k: t for k, t in table.items() if have.get(k) != t}
+        if changed:
             conn.executemany(
                 "INSERT OR REPLACE INTO translations (lang, key, text) VALUES (?,?,?)",
-                [(lang, k, t) for k, t in missing.items()],
+                [(lang, k, t) for k, t in changed.items()],
             )
-            have.update(missing)
+            have.update(changed)
     return {"lang": lang, "strings": have, "generated": True}

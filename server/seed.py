@@ -1,8 +1,14 @@
 """Seed data for the PoliGo prototype.
 
-Partner universities follow the E3UDRES2 shortlist from the app spec.
+Partner universities: the E3UDRES2 shortlist from the app spec plus the extra
+partners from the PoliGo design repo (Saxion, Fulda, JAMK, MATE). They are DEMO
+data - the courses and the matches are illustrative, confirm the real
+agreements with the UPT Erasmus Office before presenting them as official.
 Matches are precomputed once and stored, so the demo is instant and
 deterministic; on-the-fly matching plugs in later (run_matching.py hook).
+
+seed() is idempotent: it only inserts rows that are missing, so adding a
+university here reaches existing databases on the next start.
 """
 from server.db import j
 from server.db import parse
@@ -21,10 +27,14 @@ HOME_COURSES = [
 ]
 
 UNIVERSITIES = [
-    {"id": "stpolten", "name": "St. Pölten University of Applied Sciences", "city": "St. Pölten", "country": "Austria", "country_code": "AT", "lat": 48.20, "lng": 15.63, "languages": ["German", "English"], "website": "https://www.fhstp.ac.at", "greeting": "Gute Reise!"},
+    {"id": "stpolten", "name": "St. Pölten University of Applied Sciences", "city": "St. Pölten", "country": "Austria", "country_code": "AT", "lat": 48.20, "lng": 15.63, "languages": ["German", "English"], "website": "https://www.fhstp.ac.at/en", "greeting": "Gute Reise!"},
     {"id": "setubal", "name": "Instituto Politécnico de Setúbal", "city": "Setúbal", "country": "Portugal", "country_code": "PT", "lat": 38.52, "lng": -8.89, "languages": ["Portuguese", "English"], "website": "https://www.ips.pt", "greeting": "Boa viagem!"},
-    {"id": "leuven", "name": "UC Leuven-Limburg", "city": "Leuven", "country": "Belgium", "country_code": "BE", "lat": 50.88, "lng": 4.70, "languages": ["English", "Dutch"], "website": "https://www.ucll.be", "greeting": "Goede reis!"},
-    {"id": "vidzeme", "name": "Vidzeme University of Applied Sciences", "city": "Valmiera", "country": "Latvia", "country_code": "LV", "lat": 57.54, "lng": 25.43, "languages": ["English", "Latvian"], "website": "https://www.vsaa.lv", "greeting": "Laimīgu ceļu!"},
+    {"id": "leuven", "name": "UC Leuven-Limburg", "city": "Leuven", "country": "Belgium", "country_code": "BE", "lat": 50.88, "lng": 4.70, "languages": ["English", "Dutch"], "website": "https://www.ucll.be/en", "greeting": "Goede reis!"},
+    {"id": "vidzeme", "name": "Vidzeme University of Applied Sciences", "city": "Valmiera", "country": "Latvia", "country_code": "LV", "lat": 57.54, "lng": 25.43, "languages": ["English", "Latvian"], "website": "https://www.va.lv/en", "greeting": "Laimīgu ceļu!"},
+    {"id": "saxion", "name": "Saxion University of Applied Sciences", "city": "Enschede", "country": "Netherlands", "country_code": "NL", "lat": 52.22, "lng": 6.89, "languages": ["English", "Dutch"], "website": "https://www.saxion.edu", "greeting": "Goede reis!"},
+    {"id": "fulda", "name": "Hochschule Fulda - University of Applied Sciences", "city": "Fulda", "country": "Germany", "country_code": "DE", "lat": 50.56, "lng": 9.68, "languages": ["English", "German"], "website": "https://www.hs-fulda.de/en", "greeting": "Gute Reise!"},
+    {"id": "jamk", "name": "JAMK University of Applied Sciences", "city": "Jyväskylä", "country": "Finland", "country_code": "FI", "lat": 62.24, "lng": 25.75, "languages": ["English", "Finnish"], "website": "https://www.jamk.fi/en", "greeting": "Hyvää matkaa!"},
+    {"id": "mate", "name": "Hungarian University of Agriculture and Life Sciences", "city": "Gödöllő", "country": "Hungary", "country_code": "HU", "lat": 47.60, "lng": 19.36, "languages": ["English", "Hungarian"], "website": "https://uni-mate.hu", "greeting": "Jó utat!"},
 ]
 
 PARTNER_COURSES = [
@@ -55,6 +65,30 @@ PARTNER_COURSES = [
     {"id": "vid-net", "university_id": "vidzeme", "name": "Web Technologies", "ects": 4, "semester": 2, "language": "English", "description": "HTTP, client-server apps, REST APIs, web security."},
     {"id": "vid-prog", "university_id": "vidzeme", "name": "Advanced Programming", "ects": 6, "semester": 2, "language": "English", "description": "Language paradigms, compilers overview, code generation."},
     {"id": "vid-se", "university_id": "vidzeme", "name": "Software Engineering", "ects": 4, "semester": 2, "language": "English", "description": "Software lifecycle, testing, version control, teamwork."},
+    # Saxion
+    {"id": "sax-ds", "university_id": "saxion", "name": "Data Science", "ects": 5, "semester": 2, "language": "English", "description": "Statistics, data pipelines, machine learning and model evaluation."},
+    {"id": "sax-os", "university_id": "saxion", "name": "Operating Systems & Linux", "ects": 5, "semester": 2, "language": "English", "description": "Processes, scheduling, memory management and Linux administration."},
+    {"id": "sax-net", "university_id": "saxion", "name": "Networking", "ects": 5, "semester": 2, "language": "English", "description": "TCP/IP, routing, sockets and network security basics."},
+    {"id": "sax-db", "university_id": "saxion", "name": "Databases", "ects": 5, "semester": 2, "language": "English", "description": "Relational modelling, SQL, transactions and normalization."},
+    {"id": "sax-se", "university_id": "saxion", "name": "Software Testing & Quality", "ects": 5, "semester": 2, "language": "English", "description": "Test strategies, design patterns, requirements and quality assurance."},
+    # Hochschule Fulda
+    {"id": "ful-is", "university_id": "fulda", "name": "Intelligent Systems", "ects": 5, "semester": 2, "language": "English", "description": "Search, logic-based reasoning and machine learning."},
+    {"id": "ful-os", "university_id": "fulda", "name": "Operating Systems", "ects": 5, "semester": 2, "language": "English", "description": "Processes, threads, scheduling, memory and file systems."},
+    {"id": "ful-net", "university_id": "fulda", "name": "Computer Networks", "ects": 5, "semester": 2, "language": "English", "description": "Layered networks, TCP/IP, routing, sockets, wireless and security."},
+    {"id": "ful-fl", "university_id": "fulda", "name": "Formal Languages & Automata", "ects": 5, "semester": 2, "language": "English", "description": "Grammars, automata and parsing techniques."},
+    {"id": "ful-db", "university_id": "fulda", "name": "Database Systems", "ects": 5, "semester": 2, "language": "English", "description": "Relational model, SQL, normalization and transactions."},
+    {"id": "ful-spo", "university_id": "fulda", "name": "Software Project Organisation", "ects": 5, "semester": 2, "language": "English", "description": "Agile methods, teamwork and project planning."},
+    # JAMK
+    {"id": "jam-ml", "university_id": "jamk", "name": "Machine Learning & Data Analytics", "ects": 5, "semester": 2, "language": "English", "description": "Supervised learning, neural network basics and data analytics."},
+    {"id": "jam-lin", "university_id": "jamk", "name": "Linux Server Administration", "ects": 5, "semester": 2, "language": "English", "description": "Linux processes, file systems and server management."},
+    {"id": "jam-net", "university_id": "jamk", "name": "Network Technologies", "ects": 5, "semester": 2, "language": "English", "description": "TCP/IP, routing, wireless networks and network security."},
+    {"id": "jam-db", "university_id": "jamk", "name": "Database Design", "ects": 5, "semester": 2, "language": "English", "description": "Relational design, SQL, normalization and indexing."},
+    {"id": "jam-sdm", "university_id": "jamk", "name": "Software Development Methods", "ects": 5, "semester": 2, "language": "English", "description": "Agile process, testing, version control and design patterns."},
+    # MATE
+    {"id": "mat-ida", "university_id": "mate", "name": "Intelligent Data Analysis", "ects": 5, "semester": 2, "language": "English", "description": "Data mining and machine learning applied to sensor and farm data."},
+    {"id": "mat-net", "university_id": "mate", "name": "Networks and IoT", "ects": 5, "semester": 2, "language": "English", "description": "TCP/IP basics, sensor networks and network security."},
+    {"id": "mat-gis", "university_id": "mate", "name": "GIS Databases", "ects": 5, "semester": 2, "language": "English", "description": "SQL, spatial data and database design."},
+    {"id": "mat-web", "university_id": "mate", "name": "Web Development Basics", "ects": 5, "semester": 2, "language": "English", "description": "HTTP, client-side programming and version control."},
 ]
 
 MATCHES = [
@@ -86,6 +120,34 @@ MATCHES = [
     {"university_id": "vidzeme", "home_course_id": "ac-comp", "partner_course_id": "vid-prog", "label": "partial", "explanation": "Paradigms and compiler overview; no full compiler project.", "missing_topics": ["semantic analysis", "code generation"]},
     {"university_id": "vidzeme", "home_course_id": "ac-db", "partner_course_id": None, "label": "none", "explanation": "No relational databases course this semester. Take it at UPT after return.", "missing_topics": ["SQL", "transactions", "indexing"]},
     {"university_id": "vidzeme", "home_course_id": "ac-se", "partner_course_id": "vid-se", "label": "good", "explanation": "Lifecycle, testing and teamwork match the UPT course."},
+    # Saxion
+    {"university_id": "saxion", "home_course_id": "ac-ai", "partner_course_id": "sax-ds", "label": "partial", "explanation": "Data science covers machine learning and model evaluation, but search and constraint satisfaction are not taught.", "missing_topics": ["search", "constraint satisfaction"]},
+    {"university_id": "saxion", "home_course_id": "ac-os", "partner_course_id": "sax-os", "label": "good", "explanation": "Processes, scheduling and memory management match; Linux practice is a bonus."},
+    {"university_id": "saxion", "home_course_id": "ac-net", "partner_course_id": "sax-net", "label": "good", "explanation": "TCP/IP, routing and sockets match one to one."},
+    {"university_id": "saxion", "home_course_id": "ac-comp", "partner_course_id": None, "label": "none", "explanation": "No compiler construction course this semester. Take it at UPT after return.", "missing_topics": ["lexical analysis", "parsing", "code generation"]},
+    {"university_id": "saxion", "home_course_id": "ac-db", "partner_course_id": "sax-db", "label": "good", "explanation": "Relational modelling, SQL and transactions align."},
+    {"university_id": "saxion", "home_course_id": "ac-se", "partner_course_id": "sax-se", "label": "good", "explanation": "Testing, design patterns and requirements overlap fully."},
+    # Hochschule Fulda
+    {"university_id": "fulda", "home_course_id": "ac-ai", "partner_course_id": "ful-is", "label": "good", "explanation": "Search, reasoning and machine learning match; ethics is shorter abroad.", "missing_topics": ["ethics"]},
+    {"university_id": "fulda", "home_course_id": "ac-os", "partner_course_id": "ful-os", "label": "good", "explanation": "Processes, threads, scheduling, memory and file systems all match."},
+    {"university_id": "fulda", "home_course_id": "ac-net", "partner_course_id": "ful-net", "label": "good", "explanation": "Layered networks, routing and sockets match; wireless and security are extra."},
+    {"university_id": "fulda", "home_course_id": "ac-comp", "partner_course_id": "ful-fl", "label": "partial", "explanation": "Grammars, automata and parsing overlap; no code generation.", "missing_topics": ["semantic analysis", "code generation"]},
+    {"university_id": "fulda", "home_course_id": "ac-db", "partner_course_id": "ful-db", "label": "good", "explanation": "Relational model, SQL and transactions match; indexing is shorter.", "missing_topics": ["indexing"]},
+    {"university_id": "fulda", "home_course_id": "ac-se", "partner_course_id": "ful-spo", "label": "partial", "explanation": "Agile and teamwork overlap; testing and version control are lighter.", "missing_topics": ["testing", "version control"]},
+    # JAMK
+    {"university_id": "jamk", "home_course_id": "ac-ai", "partner_course_id": "jam-ml", "label": "partial", "explanation": "Machine learning and neural network basics match; search and constraint satisfaction are missing.", "missing_topics": ["search", "constraint satisfaction"]},
+    {"university_id": "jamk", "home_course_id": "ac-os", "partner_course_id": "jam-lin", "label": "partial", "explanation": "Linux processes and file systems overlap; scheduling theory is light.", "missing_topics": ["scheduling"]},
+    {"university_id": "jamk", "home_course_id": "ac-net", "partner_course_id": "jam-net", "label": "good", "explanation": "TCP/IP, routing and network security match."},
+    {"university_id": "jamk", "home_course_id": "ac-comp", "partner_course_id": None, "label": "none", "explanation": "No compiler course at JAMK. Take it at UPT after return.", "missing_topics": ["lexical analysis", "parsing", "code generation"]},
+    {"university_id": "jamk", "home_course_id": "ac-db", "partner_course_id": "jam-db", "label": "good", "explanation": "Relational design, SQL, normalization and indexing match."},
+    {"university_id": "jamk", "home_course_id": "ac-se", "partner_course_id": "jam-sdm", "label": "good", "explanation": "Agile process, testing, version control and patterns all match."},
+    # MATE
+    {"university_id": "mate", "home_course_id": "ac-ai", "partner_course_id": "mat-ida", "label": "partial", "explanation": "Machine learning on real data overlaps; search and neural networks are not covered.", "missing_topics": ["search", "neural networks"]},
+    {"university_id": "mate", "home_course_id": "ac-os", "partner_course_id": None, "label": "none", "explanation": "No operating systems course this semester. Take it at UPT after return.", "missing_topics": ["processes", "scheduling", "memory management"]},
+    {"university_id": "mate", "home_course_id": "ac-net", "partner_course_id": "mat-net", "label": "partial", "explanation": "TCP/IP and network security overlap; routing and sockets are shallow.", "missing_topics": ["routing", "sockets"]},
+    {"university_id": "mate", "home_course_id": "ac-comp", "partner_course_id": None, "label": "none", "explanation": "No compiler course. Take it at UPT after return.", "missing_topics": ["lexical analysis", "parsing", "code generation"]},
+    {"university_id": "mate", "home_course_id": "ac-db", "partner_course_id": "mat-gis", "label": "partial", "explanation": "SQL and database design match; transactions are light.", "missing_topics": ["transactions"]},
+    {"university_id": "mate", "home_course_id": "ac-se", "partner_course_id": "mat-web", "label": "partial", "explanation": "Version control overlaps; testing and design patterns are not covered.", "missing_topics": ["testing", "design patterns"]},
 ]
 
 # Timeline template: offsets in days relative to start (S), arrival (A), end (E).
@@ -139,27 +201,37 @@ WELCOME_DOC = {
 
 
 def seed():
+    """Insert whatever is missing. Safe to run on every start: rows that already
+    exist are left alone, except the website/greeting of a university, which are
+    refreshed so a corrected link reaches old databases. Returns True when
+    anything was added."""
     init_db()
     with db() as conn:
-        if conn.execute("SELECT COUNT(*) FROM universities").fetchone()[0]:
-            return False
+        def rows():
+            return sum(conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0]
+                       for t in ("home_courses", "universities", "partner_courses", "matches"))
+        before = rows()
         conn.executemany(
-            "INSERT INTO home_courses (id, program, semester, name, ects, topics, type) VALUES (?,?,?,?,?,?,?)",
+            "INSERT OR IGNORE INTO home_courses (id, program, semester, name, ects, topics, type) VALUES (?,?,?,?,?,?,?)",
             [(c["id"], PROGRAM, 2, c["name"], c["ects"], j(c["topics"]), c["type"]) for c in HOME_COURSES],
         )
         conn.executemany(
-            "INSERT INTO universities (id, name, city, country, country_code, lat, lng, languages, website, greeting) VALUES (?,?,?,?,?,?,?,?,?,?)",
+            "INSERT OR IGNORE INTO universities (id, name, city, country, country_code, lat, lng, languages, website, greeting) VALUES (?,?,?,?,?,?,?,?,?,?)",
             [(u["id"], u["name"], u["city"], u["country"], u["country_code"], u["lat"], u["lng"], j(u["languages"]), u["website"], u["greeting"]) for u in UNIVERSITIES],
         )
         conn.executemany(
-            "INSERT INTO partner_courses (id, university_id, name, ects, semester, language, description) VALUES (?,?,?,?,?,?,?)",
+            "UPDATE universities SET website = ?, greeting = ? WHERE id = ?",
+            [(u["website"], u["greeting"], u["id"]) for u in UNIVERSITIES],
+        )
+        conn.executemany(
+            "INSERT OR IGNORE INTO partner_courses (id, university_id, name, ects, semester, language, description) VALUES (?,?,?,?,?,?,?)",
             [(c["id"], c["university_id"], c["name"], c["ects"], c["semester"], c["language"], c["description"]) for c in PARTNER_COURSES],
         )
         conn.executemany(
-            "INSERT INTO matches (program, university_id, home_course_id, partner_course_id, label, explanation, missing_topics) VALUES (?,?,?,?,?,?,?)",
+            "INSERT OR IGNORE INTO matches (program, university_id, home_course_id, partner_course_id, label, explanation, missing_topics) VALUES (?,?,?,?,?,?,?)",
             [(PROGRAM, m["university_id"], m["home_course_id"], m["partner_course_id"], m["label"], m["explanation"], j(m.get("missing_topics", []))) for m in MATCHES],
         )
-    return True
+        return rows() > before
 
 
 # Project paperwork deadlines: months before the mobility start date.
