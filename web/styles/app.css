@@ -214,7 +214,7 @@ button:disabled { opacity: .45; pointer-events: none; }
 
 /* stretch to the container when the button is a direct child of a block */
 .card > .primary, .card > .ghost, .sheet > .primary, .landing > .primary, .landing > .ghost,
-.panel > .primary, #a-step1 > .primary, #a-step2 > .primary, .doc-edit > .ghost {
+.panel > .primary, #a-step1 > .primary, #a-step2 > .primary, .doc-edit > .ghost, .doc-add > .primary {
   display: flex;
   width: 100%;
 }
@@ -676,6 +676,15 @@ button.cal-cell:hover { border-color: var(--border); }
 .doc-edit summary::after { content: ""; width: 7px; height: 7px; margin-left: 2px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: translateY(-2px) rotate(45deg); transition: transform .15s; }
 .doc-edit[open] summary { margin-bottom: 14px; }
 .doc-edit[open] summary::after { transform: translateY(1px) rotate(225deg); }
+/* Documents: the one "add a document" form, folded under the list */
+.doc-add { margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--border); }
+.doc-add summary { display: flex; align-items: center; gap: 6px; cursor: pointer; list-style: none; font: 600 14px/20px var(--font); color: var(--accent-live); }
+.doc-add summary::-webkit-details-marker { display: none; }
+.doc-add[open] summary { margin-bottom: 14px; }
+.doc-add > .primary, .doc-add .form-field > .ghost { width: 100%; }
+/* Plan = steps + calendar: the calendar block is just more cards in the same panel */
+.plan-part { display: contents; }
+.pending-pill { margin: 12px 0 4px; }
 
 /* -------------------------------------------------------------------- scan */
 .scan-cards { display: flex; flex-direction: column; gap: 12px; }
@@ -744,7 +753,14 @@ button.cal-cell:hover { border-color: var(--border); }
   width: min(560px, 100%); margin: 0 auto;
   padding: 56px 20px calc(24px + var(--safe-bottom));
   text-align: center;
-  background: linear-gradient(180deg, transparent, rgba(7, 11, 20, .9) 44%);
+}
+/* the dark fade under the text spans the whole screen width, not just the text column */
+#intro::after {
+  content: "";
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 0;
+  height: min(70%, 560px);
+  background: linear-gradient(180deg, rgba(7, 11, 20, 0), rgba(7, 11, 20, .78) 40%, rgba(7, 11, 20, .96) 100%);
+  pointer-events: none;
 }
 .intro-cap { min-height: 24px; margin-bottom: 8px; font: 600 16px/24px var(--font); color: var(--text); text-shadow: 0 1px 12px #070B14; animation: fade-in .4s; }
 .intro-final { display: none; }
@@ -874,7 +890,7 @@ body:has(> .sheet)::before { content: ""; position: fixed; inset: 0; z-index: 29
 }
 
 /* ------------------------------------------------------------------- globe */
-/* The globe stays "space dark" in both themes, so it reads as a window. */
+/* Dark theme: the globe reads as a window into space. Light theme: a lit planet (overrides below). */
 .globe-box {
   position: relative;
   height: 300px;
@@ -921,6 +937,16 @@ body:has(> .sheet)::before { content: ""; position: fixed; inset: 0; z-index: 29
 .tooltip b { display: block; margin-bottom: 2px; font-weight: 600; }
 .tooltip span { display: block; color: #94A0BC; }
 .tooltip em { display: block; margin-top: 6px; font-style: normal; font-weight: 600; color: #38BDF8; }
+
+/* light theme: the globes are lit too (daylight planet instead of the space window) */
+[data-theme="light"] .globe-box {
+  border-color: var(--border);
+  background: radial-gradient(ellipse at 50% 38%, #FFFFFF 0%, #E4ECF8 72%);
+}
+[data-theme="light"] .legend { border-color: var(--border); background: rgba(255, 255, 255, .9); color: #475569; }
+[data-theme="light"] .tooltip { border-color: var(--border); background: rgba(255, 255, 255, .97); color: #0B1220; box-shadow: 0 8px 24px rgba(15, 23, 42, .14); }
+[data-theme="light"] .tooltip span { color: #475569; }
+[data-theme="light"] .tooltip em { color: #0369A1; }
 
 /* -------------------------------------------------------------- breakpoints */
 @media (max-width: 380px) {

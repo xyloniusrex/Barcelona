@@ -198,6 +198,10 @@ def get_user(uid: str):
             "SELECT * FROM mobilities WHERE user_id = ? AND status = 'active' ORDER BY created_at DESC", (uid,)
         ).fetchone()
         d["mobility"] = job(mob)
+        pending = conn.execute(
+            "SELECT * FROM mobilities WHERE user_id = ? AND status = 'pending' ORDER BY created_at DESC", (uid,)
+        ).fetchone()
+        d["pending"] = job(pending)
         return d
 
 
@@ -352,22 +356,24 @@ def _tasks_from_template(mobility_id, start, arrival, end):
 
 @app.post("/api/accepted")
 def accepted(payload: AcceptedIn, request: Request):
+    """The student says they were accepted. The mobility starts as 'pending':
+    the journey (timeline, intro, countdown) opens only after an admin approves
+    it in the admin panel (POST /api/admin/approvals/{id})."""
     arrival = payload.arrival_date or (date.fromisoformat(payload.start_date) - timedelta(days=3)).isoformat()
     mid = str(uuid.uuid4())
     with db() as conn:
         _require_session(request, conn, payload.user_id)
         _get_user(conn, payload.user_id)
-        conn.execute("UPDATE mobilities SET status = 'archived' WHERE user_id = ? AND status = 'active'", (payload.user_id,))
+        conn.execute("UPDATE mobilities SET status = 'withdrawn' WHERE user_id = ? AND status = 'pending'", (payload.user_id,))
         conn.execute(
-            "INSERT INTO mobilities (id, user_id, university_id, start_date, arrival_date, end_date, status) VALUES (?,?,?,?,?,?, 'active')",
+            "INSERT INTO mobilities (id, user_id, university_id, start_date, arrival_date, end_date, status) VALUES (?,?,?,?,?,?, 'pending')",
             (mid, payload.user_id, payload.university_id, payload.start_date, arrival, payload.end_date),
         )
-        conn.execute("UPDATE users SET mode = 'journey' WHERE id = ?", (payload.user_id,))
         conn.executemany(
             "INSERT INTO tasks (mobility_id, title, stage, due_date, source, done) VALUES (?,?,?,?,?,?)",
             _tasks_from_template(mid, payload.start_date, arrival, payload.end_date),
         )
-        logsmod.log_event("INFO", "user", f"accepted mobility at {payload.university_id}", user_id=payload.user_id,
+        logsmod.log_event("INFO", "user", f"mobility at {payload.university_id} sent for approval", user_id=payload.user_id,
                           detail=f"start={payload.start_date} end={payload.end_date}", conn=conn)
         tasks = [job(r) for r in conn.execute("SELECT * FROM tasks WHERE mobility_id = ? ORDER BY due_date", (mid,))]
         mob = job(conn.execute("SELECT * FROM mobilities WHERE id = ?", (mid,)).fetchone())
@@ -550,6 +556,7 @@ def admin_summary(request: Request):
             "sessions": conn.execute("SELECT COUNT(*) FROM sessions").fetchone()[0],
             "user_docs": conn.execute("SELECT COUNT(*) FROM user_docs").fetchone()[0],
             "mobilities": conn.execute("SELECT COUNT(*) FROM mobilities").fetchone()[0],
+            "pending": conn.execute("SELECT COUNT(*) FROM mobilities WHERE status = 'pending'").fetchone()[0],
             "errors_24h": conn.execute(
                 "SELECT COUNT(*) FROM logs WHERE level = 'ERROR' AND ts >= datetime('now', '-1 day')"
             ).fetchone()[0],
@@ -612,6 +619,54 @@ def admin_send(msg: MessageIn, request: Request):
             conn.execute("INSERT INTO messages (ts, from_admin, text) VALUES (?,?,?)", (logsmod.now(), 1, text))
             target = "all users (broadcast)"
     logsmod.log_event("INFO", "admin", f"message sent to {target}", detail=text[:200])
+    return {"ok": True}
+
+
+@app.get("/api/admin/approvals")
+def admin_approvals(request: Request):
+    """Mobilities waiting for an admin to confirm the acceptance."""
+    _require_admin(request)
+    with db() as conn:
+        rows = conn.execute(
+            "SELECT m.*, u.email, un.name AS university_name, un.city "
+            "FROM mobilities m JOIN users u ON u.id = m.user_id "
+            "LEFT JOIN universities un ON un.id = m.university_id "
+            "WHERE m.status = 'pending' ORDER BY m.created_at"
+        ).fetchall()
+    return {"pending": [dict(r) for r in rows]}
+
+
+class ApprovalIn(BaseModel):
+    approve: bool
+    note: str | None = None
+
+
+@app.post("/api/admin/approvals/{mobility_id}")
+def admin_approve(mobility_id: str, payload: ApprovalIn, request: Request):
+    _require_admin(request)
+    with db() as conn:
+        mob = conn.execute("SELECT * FROM mobilities WHERE id = ? AND status = 'pending'", (mobility_id,)).fetchone()
+        if not mob:
+            raise HTTPException(404, {"error": "ERR_NO_MOBILITY", "message": "no pending mobility with this id"})
+        uid = mob["user_id"]
+        uni = conn.execute("SELECT name FROM universities WHERE id = ?", (mob["university_id"],)).fetchone()
+        uni_name = uni["name"] if uni else mob["university_id"]
+        if payload.approve:
+            conn.execute("UPDATE mobilities SET status = 'archived' WHERE user_id = ? AND status = 'active'", (uid,))
+            conn.execute("UPDATE mobilities SET status = 'active' WHERE id = ?", (mobility_id,))
+            conn.execute("UPDATE users SET mode = 'journey' WHERE id = ?", (uid,))
+            text = f"Your mobility at {uni_name} was approved. Your journey starts now!"
+        else:
+            conn.execute("UPDATE mobilities SET status = 'rejected' WHERE id = ?", (mobility_id,))
+            text = f"Your mobility at {uni_name} was not approved."
+        if payload.note and payload.note.strip():
+            text += " " + payload.note.strip()
+        conn.execute(
+            "INSERT INTO messages (ts, from_admin, to_user, text) VALUES (?,?,?,?)",
+            (logsmod.now(), 1, uid, text),
+        )
+        logsmod.log_event("INFO", "admin", f"mobility {'approved' if payload.approve else 'rejected'} at {mob['university_id']}",
+                          user_id=uid, conn=conn)
     return {"ok": True}
 
 

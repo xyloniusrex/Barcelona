@@ -184,7 +184,7 @@ const Stage = (() => {
     anchor.parentNode.insertBefore(box, anchor);
     const tip = box.querySelector('.tooltip');
     const globe = new Globe(box, {
-      center: [14, 49],
+      center: [14, 49], theme: isLight() ? 'light' : 'dark',
       radius: (w, h) => Math.max(w, h) * 0.95,
       touchAction: 'pan-y',            // vertical swipes still scroll the page
       label: T('Globe with partner universities'),
@@ -212,12 +212,12 @@ const Stage = (() => {
     if (!ready()) return null;
     const { Globe, COLORS } = window.PoliGlobe;
     const g = new Globe(box, {
-      radius: WINDOW_RADIUS, halo: uni ? COLORS.gold : COLORS.cyan, touchAction: 'pan-y',
+      radius: WINDOW_RADIUS, halo: uni ? COLORS.gold : COLORS.cyan, touchAction: 'pan-y', theme: isLight() ? 'light' : 'dark',
       label: T('Globe showing Romania and your destination'),
       onClick: p => { if (p && p.id && onPick) onPick(p.id); },
     });
     if (uni) {
-      scene(g, uni, { spread: 0.3 });
+      scene(g, uni, { spread: 0.3, light: isLight() });
     } else {
       g.setHighlights([{ iso3: HOME.iso3, color: COLORS.cyan, alpha: 0.3 }]);
       g.setPoints(partnerPoints(visibleUnisAll(), 3));

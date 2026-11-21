@@ -7,8 +7,9 @@
  * Shape of the app:
  *   top bar   PoliGo logo (-> Home) . language . theme . Home . Profile
  *   Home      globe with Romania + your destination, live countdown, the menu
- *   screens   map / universities / shortlist / documents (explore),
- *             today / calendar / timeline / documents (journey)
+ *   screens   map / universities / shortlist (explore),
+ *             today / plan (calendar + steps) / documents (journey)
+ *   pending   "I got accepted" waits for an admin to approve it before the journey opens
  *   intro     full-screen start window after you are accepted (and on every launch)
  */
 const App = (() => {
@@ -17,18 +18,16 @@ const App = (() => {
       ['map', 'Map'],
       ['universities', 'Universities'],
       ['shortlist', 'Shortlist'],
-      ['docsSetup', 'Documents'],
     ],
     journey: [
       ['today', 'Today'],
-      ['calendar', 'Calendar'],
-      ['timeline', 'Timeline'],
+      ['plan', 'Plan'],
       ['docs', 'Documents'],
     ],
   };
   const NAV_ICONS = {
-    map: 'map', universities: 'landmark', shortlist: 'bookmark', docsSetup: 'file-text',
-    today: 'sun', calendar: 'calendar-days', timeline: 'activity', docs: 'file-text',
+    map: 'map', universities: 'landmark', shortlist: 'bookmark',
+    today: 'sun', plan: 'calendar-days', docs: 'file-text',
   };
   // [screen, label, icon, one-line description] - the tiles on Home
   const MENU = {
@@ -37,21 +36,21 @@ const App = (() => {
       ['universities', 'Universities', 'landmark', 'Compare how many subjects match'],
       ['shortlist', 'Shortlist', 'bookmark', 'Your top 3, in order'],
       ['subjects', 'My subjects', 'check', 'Choose what to match'],
-      ['docsSetup', 'Documents', 'file-text', 'ID, passport, EHIC'],
       ['profile', 'Profile', 'user', 'Account and settings'],
     ],
     journey: [
       ['today', 'Today', 'sun', 'What is next for you'],
-      ['calendar', 'Calendar', 'calendar-days', 'Dates and deadlines'],
-      ['timeline', 'Timeline', 'activity', 'Every step, in order'],
-      ['docs', 'Documents', 'file-text', 'Erasmus papers and ID'],
+      ['plan', 'Plan', 'calendar-days', 'Your steps and dates, in one place'],
+      ['docs', 'Documents', 'file-text', 'Erasmus papers and your ID, in one place'],
       ['scanJ', 'Scan a document', 'scan-line', 'Understand any paper'],
       ['profile', 'Profile', 'user', 'Account and settings'],
     ],
   };
   const NAV_SCREENS = new Set([].concat(NAVS.explore, NAVS.journey).map(n => n[0]));
-  const KNOWN = new Set(['landing', 'auth', 'onboarding', 'docsSetup', 'uni', 'subjects', 'scanJ', 'admin', 'home', 'profile', 'map',
-    'universities', 'shortlist', 'today', 'calendar', 'timeline', 'docs']);
+  const KNOWN = new Set(['landing', 'auth', 'onboarding', 'uni', 'subjects', 'scanJ', 'admin', 'home', 'profile', 'map',
+    'universities', 'shortlist', 'today', 'plan', 'docs']);
+  // old screen names (links, saved state, the terminal) -> where they live now
+  const ALIAS = { calendar: 'plan', timeline: 'plan', docsSetup: 'docs' };
   const STAGES = ['before', 'arrival', 'during', 'before-return', 'after-return'];
   const STAGE_LABELS = {
     before: 'Before departure', arrival: 'Arrival (first 2 weeks)', during: 'During',
@@ -128,6 +127,12 @@ const App = (() => {
     if (!code) return '';
     return '<img class="flag ' + (cls || '') + '" src="/icons/flags/' + String(code).toLowerCase() + '.svg" alt="" loading="lazy"/>';
   }
+
+  // PWA install: Chrome/Edge/Android fire beforeinstallprompt; Safari never does (manual "Add to Home Screen").
+  let installPrompt = null;
+  window.addEventListener('beforeinstallprompt', ev => { ev.preventDefault(); installPrompt = ev; });
+  window.addEventListener('appinstalled', () => { installPrompt = null; });
+  const isStandalone = () => (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
 
   function startTimer(fn, ms) { timers.push(setInterval(fn, ms)); }
   function clearTimers() { while (timers.length) clearInterval(timers.pop()); }
@@ -323,6 +328,7 @@ const App = (() => {
 
   function go(screen, opts) {
     opts = opts || {};
+    screen = ALIAS[screen] || screen;
     const cur = Store.state.screen;
     if (screen === cur && !opts.force) { syncHash(screen); return; }
     if (opts.replace) history.length = 0;
@@ -350,7 +356,8 @@ const App = (() => {
 
   window.addEventListener('hashchange', () => {
     if (hashLock) return;
-    const s = (location.hash || '').replace(/^#/, '') || 'landing';
+    const raw = (location.hash || '').replace(/^#/, '') || 'landing';
+    const s = ALIAS[raw] || raw;
     if (!KNOWN.has(s) || s === Store.state.screen) return;
     if (s === 'landing' && Store.state.seenLanding) return;
     Store.state.screen = s;
@@ -368,8 +375,7 @@ const App = (() => {
 
   function setTheme(theme) {
     Store.setTheme(theme);
-    syncChrome();
-    renderTopbar();
+    render();        // globes on Home / Map are rebuilt in the new palette
   }
 
   function renderTopbar() {
@@ -425,7 +431,8 @@ const App = (() => {
   // The background planet follows the chosen / accepted university.
   function syncStage() {
     const st = Store.state;
-    const id = st.mode === 'journey' && st.mobility ? st.mobility.university_id : st.activeUniId;
+    const id = st.mode === 'journey' && st.mobility ? st.mobility.university_id
+      : st.pending ? st.pending.university_id : st.activeUniId;
     Stage.setDestination(id ? Store.uniById(id) : null);
   }
 
@@ -439,11 +446,10 @@ const App = (() => {
     try {
       const { screen } = Store.state;
       const views = {
-        landing: viewLanding, auth: viewAuth, onboarding: viewOnboarding, docsSetup: viewDocsSetup,
+        landing: viewLanding, auth: viewAuth, onboarding: viewOnboarding,
         home: viewHome, profile: viewProfile, subjects: viewSubjects,
         map: viewMap, universities: viewUniversities, uni: viewUniversity,
-        shortlist: viewShortlist, today: viewToday,
-        calendar: viewCalendar, timeline: viewTimeline,
+        shortlist: viewShortlist, today: viewToday, plan: viewPlan,
         scanJ: viewScan, docs: viewDocs, admin: viewAdmin,
       };
       $app.innerHTML = '';
@@ -683,7 +689,7 @@ const App = (() => {
   async function finishOnboarding(draft) {
     await Store.saveProfile({ onboarding: JSON.stringify(draft) });
     Store.state.onbDraft = null;
-    go('docsSetup', { replace: true });
+    go('home', { replace: true });
   }
 
   function afterAuth() {
@@ -698,11 +704,28 @@ const App = (() => {
   function viewHome(root) {
     const st = Store.state;
     const mob = st.mode === 'journey' ? st.mobility : null;
-    const uni = mob ? Store.uniById(mob.university_id) : (st.activeUniId ? Store.uniById(st.activeUniId) : null);
+    const pend = !mob && st.pending ? st.pending : null;
+    const uni = mob ? Store.uniById(mob.university_id)
+      : pend ? Store.uniById(pend.university_id)
+      : (st.activeUniId ? Store.uniById(st.activeUniId) : null);
     const tiles = MENU[mob ? 'journey' : 'explore'];
 
     let info;
-    if (uni) {
+    if (pend && uni) {
+      info = '<div class="card home-info">' +
+        '<div class="route">' +
+        '<span class="route-city">' + flagImg('RO') + '<b>Timișoara</b></span>' +
+        '<span class="route-arrow">' + icon('arrow-right') + '</span>' +
+        '<span class="route-city">' + flagImg(uni.country_code) + '<b>' + esc(uni.city) + '</b></span>' +
+        '</div>' +
+        '<p class="hint route-sub">' + esc(uni.name) + ' - ' + esc(T(uni.country)) +
+        '<br/>' + esc(fmtDate(pend.start_date)) + ' - ' + esc(fmtDate(pend.end_date)) + '</p>' +
+        '<p class="pending-pill"><span class="pill partial">' + icon('clock', 'sm-ico') + ' ' + esc(T('Waiting for approval')) + '</span></p>' +
+        '<p class="hint">' + esc(T('The Erasmus office has to confirm your acceptance. Your journey (steps, countdown, documents) opens as soon as it is approved.')) + '</p>' +
+        '<div class="home-actions"><button class="primary" id="h-check">' + esc(T('Check again')) + '</button>' +
+        '<button class="ghost" id="h-change">' + esc(T('Choose another')) + '</button></div>' +
+        '</div>';
+    } else if (uni) {
       info = '<div class="card home-info">' +
         '<div class="route">' +
         '<span class="route-city">' + flagImg('RO') + '<b>Timișoara</b></span>' +
@@ -739,10 +762,37 @@ const App = (() => {
     bind('#h-map', () => go('map'));
     bind('#h-open', () => go('uni'));
     bind('#h-change', () => go('map'));
+    bind('#h-check', () => checkApproval(false));
     if (mob) startCountdown(wrap);
+    if (pend) startTimer(() => checkApproval(true), 30000);   // approval shows up on its own
 
     Stage.homeGlobe(wrap.querySelector('#home-globe'), uni, id => { st.activeUniId = id; go('uni'); });
     root.appendChild(wrap);
+  }
+
+  // Has an admin approved the pending mobility? quiet = background poll (no toast).
+  let checking = false;
+  async function checkApproval(quiet) {
+    if (checking) return;
+    checking = true;
+    try {
+      await Store.refresh();
+      const st = Store.state;
+      if (st.mode === 'journey' && st.mobility && !st.pending) {
+        tlOpen = null;
+        go('home', { replace: true, force: true });
+        await showIntro();
+      } else if (!st.pending) {
+        render();
+        if (!quiet) toast(T('Your request was not approved. Check your messages in Profile.'));
+      } else if (!quiet) {
+        toast(T('Still waiting for approval'));
+      }
+    } catch (e) {
+      if (!quiet) toast(errText(e));
+    } finally {
+      checking = false;
+    }
   }
 
   /* ----------------------------------------------------------------- intro */
@@ -883,97 +933,8 @@ const App = (() => {
     return row;
   }
 
-  /* ----------------------------------------------------------- document setup */
-
   const typeSelect = () => '<div class="select-wrap"><select id="doc-type">' +
     DOC_TYPES.map(t => '<option value="' + esc(t) + '">' + esc(T(t)) + '</option>').join('') + '</select>' + icon('chevron-down', 'sel-ico') + '</div>';
-
-  async function viewDocsSetup(root) {
-    let docs = await Store.safeUserDocs();
-    const wrap = h('<div class="screen panel">' +
-      '<div class="card">' +
-      '<p class="section-label">' + esc(T('Your documents')) + '</p>' +
-      '<p class="hint">' + esc(T('ID, passport, student ID, EHIC: offices ask for them constantly. Type the details here, or attach a photo. The file itself stays on this device either way.')) + '</p>' +
-      '<div id="doc-list"></div>' +
-      '</div>' +
-      '<div class="card">' +
-      '<p class="section-label">' + esc(T('Add manually')) + '</p>' +
-      '<div class="form-field"><label>' + esc(T('Document type')) + '</label>' + typeSelect() + '</div>' +
-      '<div class="form-field"><label>' + esc(T('Number')) + '</label><input id="man-number" placeholder="' + esc(T('e.g. RX123456')) + '" /></div>' +
-      dmyField('Issued on', { id: 'man-issued', from: yearNow - 25, to: yearNow }) +
-      dmyField('Expires on', { id: 'man-expires', from: yearNow - 1, to: yearNow + 20 }) +
-      '<div class="form-field"><label>' + esc(T('Notes')) + '</label><input id="man-notes" placeholder="' + esc(T('Anything to remember')) + '" /></div>' +
-      '<button class="ghost" id="man-save">' + esc(T('Add manually')) + '</button>' +
-      '</div>' +
-      '<div class="card">' +
-      '<p class="section-label">' + esc(T('Upload a copy')) + '</p>' +
-      '<p class="hint">' + esc(T('Optional. The photo never leaves your device: it is kept in the browser cache.')) + '</p>' +
-      '<button class="primary" id="pick-doc">' + icon('upload', 'inline-ico') + ' ' + esc(T('Upload a copy')) + '</button>' +
-      '<input id="doc-file" type="file" hidden />' +
-      '</div>' +
-      '<button class="primary" id="docs-done">' + esc(T('Continue')) + '</button>' +
-      '</div>');
-    wireDmy(wrap);
-    const sel = wrap.querySelector('#doc-type');
-    const fileInput = wrap.querySelector('#doc-file');
-    const listEl = wrap.querySelector('#doc-list');
-
-    function drawList() {
-      listEl.innerHTML = '';
-      if (!docs.length) {
-        listEl.innerHTML = '<p class="hint" style="margin:0 0 4px">' + esc(T('Nothing added yet.')) + '</p>';
-        return;
-      }
-      for (const d of docs) listEl.appendChild(docRow(d, reload));
-    }
-
-    async function reload() {
-      docs = await Store.safeUserDocs();
-      drawList();
-    }
-
-    wrap.querySelector('#man-save').onclick = async () => {
-      try {
-        const rec = await Store.addUserDoc({
-          doc_type: sel.value, file_name: '',
-          doc_number: wrap.querySelector('#man-number').value || null,
-          issued_on: wrap.querySelector('#man-issued').value || null,
-          expires_on: wrap.querySelector('#man-expires').value || null,
-          notes: wrap.querySelector('#man-notes').value || null,
-        });
-        docs = docs.filter(d => d.doc_type !== rec.doc_type);
-        docs.push(rec);
-        drawList();
-        wrap.querySelector('#man-number').value = '';
-        wrap.querySelector('#man-issued').setIso('');
-        wrap.querySelector('#man-expires').setIso('');
-        wrap.querySelector('#man-notes').value = '';
-        toast(T('{doc} saved', { doc: T(sel.value) }));
-      } catch (e) { toast(T('Could not save it. Is the server online?')); }
-    };
-
-    wrap.querySelector('#pick-doc').onclick = () => fileInput.click();
-    fileInput.onchange = async () => {
-      const f = fileInput.files && fileInput.files[0];
-      if (!f) return;
-      await Store.saveDocBlob(sel.value, f);
-      try {
-        const rec = await Store.addUserDoc({ doc_type: sel.value, file_name: f.name, size: f.size });
-        docs = docs.filter(d => d.doc_type !== rec.doc_type);
-        docs.push(rec);
-      } catch (e) {
-        docs.push({ id: -Date.now(), doc_type: sel.value, file_name: f.name, size: f.size });
-      }
-      drawList();
-      toast(T('{doc} saved on this device', { doc: T(sel.value) }));
-      fileInput.value = '';
-    };
-
-    wrap.querySelector('#docs-done').onclick = () => go('home', { replace: true });
-
-    drawList();
-    root.appendChild(wrap);
-  }
 
   /* ------------------------------------------------------ deadlines + profile */
 
@@ -1037,11 +998,6 @@ const App = (() => {
       '<button class="primary" id="save-profile">' + esc(T('Save and pick subjects')) + '</button>' +
       '</div>' +
       '<div class="card">' +
-      '<p class="section-label">' + esc(T('Documents')) + '</p>' +
-      '<div id="prof-docs"><p class="hint" style="margin:0 0 12px">' + esc(T('Add your ID, passport, student ID and EHIC card once: they are asked for everywhere.')) + '</p></div>' +
-      '<button class="ghost" id="manage-docs">' + esc(T('Your documents')) + '</button>' +
-      '</div>' +
-      '<div class="card">' +
       '<p class="section-label">' + esc(T('Settings')) + '</p>' +
       (ob ? '<p class="hint" style="margin-top:0">' + esc(ob) + '</p>' : '') +
       '<div class="form-field"><label>' + esc(T('Theme')) + '</label>' +
@@ -1054,6 +1010,13 @@ const App = (() => {
       LANGS.map(l => '<option value="' + l[0] + '" ' + sel(st.language === l[0]) + '>' + esc(l[1]) + '</option>').join('') +
       '</select>' + icon('chevron-down', 'sel-ico') + '</div></div>' +
       '<button class="ghost" id="redo-onb">' + esc(T('Redo setup')) + '</button>' +
+      '</div>' +
+      '<div class="card">' +
+      '<p class="section-label">' + esc(T('App on your phone')) + '</p>' +
+      (isStandalone()
+        ? '<p class="hint" style="margin:0">' + esc(T('You are using the installed app.')) + '</p>'
+        : '<p class="hint" style="margin-top:0">' + esc(T('Open this site on your phone, then: Android (Chrome) - menu, "Install app"; iPhone (Safari) - Share, "Add to Home Screen". PoliGo then opens full screen, like a normal app.')) + '</p>' +
+          (installPrompt ? '<button class="primary" id="install-app">' + icon('arrow-right', 'inline-ico') + ' ' + esc(T('Install the app')) + '</button>' : '')) +
       '</div>' +
       '<div class="card">' +
       '<p class="section-label">' + esc(T('Messages')) + '</p>' +
@@ -1073,21 +1036,6 @@ const App = (() => {
         : '<button class="primary" id="go-auth">' + icon('log-in', 'inline-ico') + ' ' + esc(T('Log in with your student email')) + '</button>') +
       '</div>' +
       '</div>');
-
-    (async () => {
-      const docs = await Store.safeUserDocs();
-      const el = wrap.querySelector('#prof-docs');
-      if (docs.length) {
-        el.innerHTML = '';
-        for (const d of docs) {
-          el.appendChild(h('<div class="doc-row">' +
-            '<span class="doc-ico">' + icon(DOC_ICONS[d.doc_type] || 'file-text') + '</span>' +
-            '<span style="flex:1;min-width:0"><span class="doc-name">' + esc(T(d.doc_type)) + '</span><br/>' +
-            '<span class="doc-meta">' + esc(docMeta(d)) + '</span></span>' +
-            '<span class="pill good">' + icon('check', 'sm-ico') + ' ' + esc(T('Added')) + '</span></div>'));
-        }
-      }
-    })();
 
     (async () => {
       const box = wrap.querySelector('#inbox-list');
@@ -1114,7 +1062,6 @@ const App = (() => {
       });
       go('subjects');
     };
-    wrap.querySelector('#manage-docs').onclick = () => go('docsSetup');
     wrap.querySelector('#set-theme').onchange = e => { setTheme(e.target.value); toast(T(e.target.value === 'light' ? 'Light' : 'Dark')); };
     wrap.querySelector('#set-lang').onchange = async e => {
       await Store.setLanguage(e.target.value);
@@ -1122,6 +1069,17 @@ const App = (() => {
       toast(e.target.value === 'ro' ? 'Română' : 'English');
     };
     wrap.querySelector('#redo-onb').onclick = () => go('onboarding');
+    const installBtn = wrap.querySelector('#install-app');
+    if (installBtn) {
+      installBtn.onclick = async () => {
+        const p = installPrompt;
+        installPrompt = null;
+        if (!p) return;
+        p.prompt();
+        try { await p.userChoice; } catch (e) { /* dismissed */ }
+        render();
+      };
+    }
     wrap.querySelector('#inbox-send').onclick = async () => {
       const ta = wrap.querySelector('#inbox-reply');
       const text = ta.value.trim();
@@ -1361,7 +1319,8 @@ const App = (() => {
       dmyField('Start date', { id: 'a-start', value: ymd(defStart), from: now.getFullYear(), to: now.getFullYear() + 4 }) +
       dmyField('Arrival date (optional)', { id: 'a-arrival', value: ymd(addDays(defStart, -3)), from: now.getFullYear(), to: now.getFullYear() + 4 }) +
       dmyField('End date', { id: 'a-end', value: ymd(addDays(now, 197)), from: now.getFullYear(), to: now.getFullYear() + 5 }) +
-      '<button class="primary" id="acc-go">' + esc(T('Start my journey')) + '</button>' +
+      '<p class="hint">' + esc(T('An admin from the Erasmus office confirms it before your journey starts.')) + '</p>' +
+      '<button class="primary" id="acc-go">' + esc(T('Send for approval')) + '</button>' +
       '<button class="link" id="acc-cancel">' + esc(T('Not now')) + '</button>' +
       '</div>');
     wireDmy(sheet);
@@ -1381,12 +1340,10 @@ const App = (() => {
           arrival_date: arrivalInp.value || null,
           end_date: endInp.value,
         });
-        const uni = Store.uniById(out.mobility.university_id);
-        tlOpen = null;
         sheet.remove();
+        Store.state.activeUniId = out.mobility.university_id;
         go('home', { replace: true, force: true });
-        await showIntro();
-        if (uni && uni.greeting) toast(uni.greeting + ' ' + T('Your journey starts now.'));
+        toast(T('Sent for approval. Your journey opens once the Erasmus office confirms it.'));
       } catch (e) { toast(errText(e)); }
     };
     sheet.querySelector('#acc-cancel').onclick = () => sheet.remove();
@@ -1463,9 +1420,25 @@ const App = (() => {
     startCountdown(wrap0);
   }
 
+  /* ------------------------------------------------- plan = steps + calendar */
+
+  // One screen instead of two: the steps to do (what used to be Timeline) on top,
+  // the month calendar with the same steps and deadlines marked below it.
+  function viewPlan(root) {
+    const panel = h('<div class="screen panel"></div>');
+    if (!Store.state.mobility) {
+      panel.innerHTML = '<div class="card"><p class="hint" style="margin:0">' + esc(T('Your plan appears once your mobility is approved.')) + '</p></div>';
+      root.appendChild(panel);
+      return;
+    }
+    stepsInto(panel);
+    calendarInto(panel);
+    root.appendChild(panel);
+  }
+
   /* ----------------------------------------------------------------- calendar */
 
-  function viewCalendar(root) {
+  function calendarInto(root) {
     const st = Store.state;
     if (!st.calView) {
       const n = new Date();
@@ -1486,7 +1459,7 @@ const App = (() => {
     const taskSet = new Set(st.tasks.filter(t => t.due_date).map(t => t.due_date));
     const today = ymd(new Date());
 
-    const wrap = h('<div class="screen panel">' +
+    const wrap = h('<div class="plan-part">' +
       '<div class="card">' +
       '<p class="section-label">' + esc(T('Calendar')) + '</p>' +
       '<div class="cal-head">' +
@@ -1497,10 +1470,10 @@ const App = (() => {
       '<div class="cal-grid" id="cal-grid"></div>' +
       '<p class="hint cal-legend">' +
       '<span class="lg"><i class="sw dl"></i>' + esc(T('Deadline')) + '</span>' +
-      '<span class="lg"><i class="sw task"></i>' + esc(T('Task')) + '</span>' +
+      '<span class="lg"><i class="sw task"></i>' + esc(T('Step')) + '</span>' +
       '<span class="lg"><i class="sw avail"></i>' + esc(T('Available')) + '</span>' +
       '<span class="lg"><i class="sw away"></i>' + esc(T('Away')) + '</span></p>' +
-      '<p class="hint">' + esc(T('Tap a day to mark when you are free. The away block follows your accepted mobility.')) + '</p>' +
+      '<p class="hint">' + esc(T('The steps above are marked on their due day. Tap a day to mark when you are free.')) + '</p>' +
       '</div>' +
       '<div class="card">' +
       '<p class="section-label">' + esc(T('Deadlines')) + '</p>' +
@@ -1567,16 +1540,15 @@ const App = (() => {
     root.appendChild(wrap);
   }
 
-  /* ------------------------------------------------------ timeline / scan / docs */
+  /* --------------------------------------------------------- steps / scan / docs */
 
-  function viewTimeline(root) {
+  function stepsInto(root) {
     const tasks = Store.state.tasks.slice().sort((a, b) => (a.due_date || '').localeCompare(b.due_date || ''));
     if (!tlOpen) {
       // open the stages that still have something to do (at most two)
       tlOpen = new Set(STAGES.filter(s => tasks.some(t => t.stage === s && !t.done)).slice(0, 2));
     }
-    const wrap = h('<div class="screen panel"><div class="card" id="tl"></div></div>');
-    const card = wrap.querySelector('#tl');
+    const card = h('<div class="card" id="tl"></div>');
 
     const taskCard = t => {
       const src = { template: 'Template', scan: 'From scan', user: 'Added by you' }[t.source] || t.source;
@@ -1588,7 +1560,7 @@ const App = (() => {
     };
 
     function draw() {
-      card.innerHTML = '<p class="section-label">' + esc(T('Timeline')) + '</p>' +
+      card.innerHTML = '<p class="section-label">' + esc(T('Your steps')) + '</p>' +
         STAGES.map(st => {
           const list = tasks.filter(t => t.stage === st);
           if (!list.length) return '';
@@ -1630,7 +1602,7 @@ const App = (() => {
       };
     }
     draw();
-    root.appendChild(wrap);
+    root.appendChild(card);
   }
 
   // result_json is either the explanation itself or (older rows) the whole demo document
@@ -1690,12 +1662,14 @@ const App = (() => {
           await Store.addTask(Store.state.mobility ? Store.state.mobility.id : null, dl.title || dl.text, 'during', due);
           b.textContent = T('Added');
           b.disabled = true;
-          toast(T('Added to timeline'));
+          toast(T('Added to your plan'));
         };
       });
     }
   }
 
+  // One Documents screen: the Erasmus papers checklist, your own ID documents
+  // (edited in place, with one "add" form) and what you scanned.
   async function viewDocs(root) {
     const staticDocs = [
       ['Learning Agreement - before mobility', 'signed'],
@@ -1705,52 +1679,106 @@ const App = (() => {
       ['Certificate of attendance', 'pending'],
       ['Transcript of Records (partner)', 'at the end'],
     ];
-    const scans = await Store.getScans();
+    const [scans, docs0] = await Promise.all([Store.getScans(), Store.safeUserDocs()]);
+    let docs = docs0;
     const wrap = h('<div class="screen panel">' +
       '<div class="card">' +
-      '<p class="section-label">' + esc(T('Erasmus documents')) + '</p>' +
+      '<p class="section-label">' + esc(T('Erasmus papers')) + '</p>' +
+      '<p class="hint" style="margin-top:0">' + esc(T('What the Erasmus office expects from you, and where each paper stands.')) + '</p>' +
       staticDocs.map(d => {
         const color = d[1] === 'signed' || d[1] === 'active' ? 'good' : 'none';
-        const ico = color === 'good' ? 'check' : 'x';
+        const ico = color === 'good' ? 'check' : 'clock';
         return '<div class="task-card"><span><span class="t-title">' + esc(T(d[0])) + '</span>' +
           '<span class="t-meta"><span class="pill ' + color + '">' + icon(ico, 'sm-ico') + ' ' + esc(T(d[1])) + '</span></span></span></div>';
       }).join('') +
       '</div>' +
       '<div class="card">' +
-      '<p class="section-label">' + esc(T('Your documents')) + '</p>' +
-      '<div id="my-docs"></div>' +
-      '<button class="ghost" id="manage-docs">' + esc(T('Manage documents')) + '</button>' +
+      '<p class="section-label">' + esc(T('ID and personal documents')) + '</p>' +
+      '<p class="hint" style="margin-top:0">' + esc(T('ID, passport, student ID, EHIC: offices abroad ask for them constantly. Fill them in once, here. A photo, if you add one, stays on this device.')) + '</p>' +
+      '<div id="doc-list"></div>' +
+      '<details class="doc-add"' + (docs.length ? '' : ' open') + '><summary>' + icon('plus', 'sm-ico') + ' ' + esc(T('Add a document')) + '</summary>' +
+      '<div class="form-field"><label>' + esc(T('Document type')) + '</label>' + typeSelect() + '</div>' +
+      '<div class="form-field"><label>' + esc(T('Number')) + '</label><input id="man-number" placeholder="' + esc(T('e.g. RX123456')) + '" /></div>' +
+      dmyField('Issued on', { id: 'man-issued', from: yearNow - 25, to: yearNow }) +
+      dmyField('Expires on', { id: 'man-expires', from: yearNow - 1, to: yearNow + 20 }) +
+      '<div class="form-field"><label>' + esc(T('Notes')) + '</label><input id="man-notes" placeholder="' + esc(T('Anything to remember')) + '" /></div>' +
+      '<div class="form-field"><label>' + esc(T('Photo (optional)')) + '</label>' +
+      '<button class="ghost" id="pick-doc" type="button">' + icon('upload', 'inline-ico') + ' <span id="pick-name">' + esc(T('Attach a photo')) + '</span></button>' +
+      '<input id="doc-file" type="file" accept="image/*,application/pdf" hidden /></div>' +
+      '<button class="primary" id="man-save">' + esc(T('Save document')) + '</button>' +
+      '</details>' +
       '</div>' +
-      (scans.length ? '<div class="card"><p class="section-label">' + esc(T('Scanned documents')) + '</p>' +
-        scans.map(s => '<div class="task-card"><span><span class="t-title">' + esc(T(s.document_type)) + '</span><span class="t-meta">' + esc(T(s.summary || '')) + '</span></span></div>').join('') +
-        '</div>' : '') +
+      '<div class="card">' +
+      '<p class="section-label">' + esc(T('Scanned documents')) + '</p>' +
+      (scans.length
+        ? scans.map(s => '<div class="task-card"><span><span class="t-title">' + esc(T(s.document_type)) + '</span><span class="t-meta">' + esc(T(s.summary || '')) + '</span></span></div>').join('')
+        : '<p class="hint" style="margin-top:0">' + esc(T('Got a paper in another language? Scan it and get plain answers.')) + '</p>') +
+      '<button class="ghost" id="go-scan">' + icon('scan-line', 'inline-ico') + ' ' + esc(T('Scan a document')) + '</button>' +
+      '</div>' +
       '<button class="link" id="back-explore">' + esc(T('Back to explore (archives this journey)')) + '</button>' +
       '</div>');
+    wireDmy(wrap);
+    const sel = wrap.querySelector('#doc-type');
+    const fileInput = wrap.querySelector('#doc-file');
+    const listEl = wrap.querySelector('#doc-list');
+    let pickedFile = null;
 
-    (async () => {
-      const docs = await Store.safeUserDocs();
-      const el = wrap.querySelector('#my-docs');
+    function drawList() {
+      listEl.innerHTML = '';
       if (!docs.length) {
-        el.innerHTML = '<p class="hint" style="margin:0 0 8px">' + esc(T('No documents recorded yet.')) + '</p>';
+        listEl.innerHTML = '<p class="hint" style="margin:0 0 4px">' + esc(T('Nothing added yet.')) + '</p>';
         return;
       }
-      el.innerHTML = '';
-      for (const d of docs) {
-        el.appendChild(h('<div class="doc-row">' +
-          '<span class="doc-ico">' + icon(DOC_ICONS[d.doc_type] || 'file-text') + '</span>' +
-          '<span style="flex:1;min-width:0"><span class="doc-name">' + esc(T(d.doc_type)) + '</span><br/>' +
-          '<span class="doc-meta">' + esc(docMeta(d)) + '</span></span>' +
-          '</div>'));
-      }
-    })();
+      for (const d of docs) listEl.appendChild(docRow(d, reload));
+    }
 
-    wrap.querySelector('#manage-docs').onclick = () => go('docsSetup');
+    async function reload() {
+      docs = await Store.safeUserDocs();
+      drawList();
+    }
+
+    wrap.querySelector('#pick-doc').onclick = () => fileInput.click();
+    fileInput.onchange = () => {
+      pickedFile = (fileInput.files && fileInput.files[0]) || null;
+      wrap.querySelector('#pick-name').textContent = pickedFile ? pickedFile.name : T('Attach a photo');
+    };
+
+    wrap.querySelector('#man-save').onclick = async () => {
+      const type = sel.value;
+      try {
+        if (pickedFile) await Store.saveDocBlob(type, pickedFile);
+        const rec = await Store.addUserDoc({
+          doc_type: type,
+          file_name: pickedFile ? pickedFile.name : '',
+          size: pickedFile ? pickedFile.size : 0,
+          doc_number: wrap.querySelector('#man-number').value || null,
+          issued_on: wrap.querySelector('#man-issued').value || null,
+          expires_on: wrap.querySelector('#man-expires').value || null,
+          notes: wrap.querySelector('#man-notes').value || null,
+        });
+        docs = docs.filter(d => d.doc_type !== rec.doc_type);
+        docs.push(rec);
+        drawList();
+        wrap.querySelector('#man-number').value = '';
+        wrap.querySelector('#man-issued').setIso('');
+        wrap.querySelector('#man-expires').setIso('');
+        wrap.querySelector('#man-notes').value = '';
+        pickedFile = null;
+        fileInput.value = '';
+        wrap.querySelector('#pick-name').textContent = T('Attach a photo');
+        wrap.querySelector('.doc-add').open = false;
+        toast(T('{doc} saved', { doc: T(type) }));
+      } catch (e) { toast(T('Could not save it. Is the server online?')); }
+    };
+
+    wrap.querySelector('#go-scan').onclick = () => go('scanJ');
     wrap.querySelector('#back-explore').onclick = async () => {
       await Store.saveProfile({}, 'explore');
       Store.state.mobility = null;
       Store.saveLocal();
       go('home', { replace: true, force: true });
     };
+    drawList();
     root.appendChild(wrap);
   }
 
@@ -1758,13 +1786,14 @@ const App = (() => {
 
   function viewAdmin(root) {
     let token = Store.getAdminToken();
-    let tab = 'summary';
+    let tab = 'approvals';
     const wrap = h('<div class="screen panel">' +
       '<div class="card">' +
       '<p class="section-label">Admin</p>' +
       '<div class="form-field" id="ad-token-row"><label>Admin token</label>' +
       '<input id="ad-token" type="password" placeholder="content of data/admin_token.txt inside the container" /></div>' +
       '<div class="scan-cards">' +
+      '<button class="ghost" data-tab="approvals">Approvals</button>' +
       '<button class="ghost" data-tab="summary">Summary</button>' +
       '<button class="ghost" data-tab="logs">Logs</button>' +
       '<button class="ghost" data-tab="messages">Messages</button>' +
@@ -1785,12 +1814,37 @@ const App = (() => {
       Store.setAdminToken(tok);
       body.innerHTML = '<p class="hint">Loading...</p>';
       try {
-        if (tab === 'summary') {
+        if (tab === 'approvals') {
+          const out = await Store.adminApi('/api/admin/approvals', {}, tok);
+          const list = out.pending || [];
+          body.innerHTML = '<p class="section-label" style="margin-top:10px">Waiting for approval (' + list.length + ')</p>' +
+            (list.map(m =>
+              '<div class="doc-row" data-mid="' + esc(m.id) + '"><span style="flex:1;min-width:0">' +
+              '<span class="doc-name">' + esc(m.email || String(m.user_id).slice(0, 8)) + '</span><br/>' +
+              '<span class="doc-meta">' + esc(m.university_name || m.university_id) + (m.city ? ', ' + esc(m.city) : '') +
+              ' - ' + esc(fmtDate(m.start_date)) + ' to ' + esc(fmtDate(m.end_date)) + ' - sent ' + esc(m.created_at) + '</span></span>' +
+              '<button class="ghost" data-approve="1">Approve</button>' +
+              '<button class="ghost" data-approve="0">Reject</button></div>'
+            ).join('') || '<p class="meta">Nothing to approve.</p>');
+          body.querySelectorAll('[data-approve]').forEach(b => {
+            b.onclick = async () => {
+              const mid = b.closest('[data-mid]').dataset.mid;
+              const approve = b.dataset.approve === '1';
+              try {
+                await Store.adminApi('/api/admin/approvals/' + encodeURIComponent(mid), {
+                  method: 'POST', body: JSON.stringify({ approve }),
+                }, getTok());
+                toast(approve ? 'Approved' : 'Rejected');
+                load();
+              } catch (e) { body.insertAdjacentHTML('afterbegin', '<p class="meta log-error">' + esc((e.code || 'ERR') + ': ' + e.message) + '</p>'); }
+            };
+          });
+        } else if (tab === 'summary') {
           const out = await Store.adminApi('/api/admin/summary', {}, tok);
           const c = out.counts || {};
           body.innerHTML =
             '<p class="meta">Uptime: ' + esc(out.uptime) + '</p>' +
-            '<p class="meta">Users: ' + c.users + ' / Sessions: ' + c.sessions + ' / Docs: ' + c.user_docs + ' / Mobilities: ' + c.mobilities + '</p>' +
+            '<p class="meta">Users: ' + c.users + ' / Sessions: ' + c.sessions + ' / Docs: ' + c.user_docs + ' / Mobilities: ' + c.mobilities + ' / Pending approval: ' + c.pending + '</p>' +
             '<p class="meta">Errors 24h: ' + c.errors_24h + ' / Warnings 24h: ' + c.warn_24h + '</p>' +
             '<p class="meta">Last Erasmus scan: ' + (out.last_scan ? esc(out.last_scan.run_at) + ' - ' + out.last_scan.count + ' opportunities' : 'none') + '</p>' +
             (out.last_scan && out.last_scan.opportunities ? out.last_scan.opportunities.slice(0, 8).map(o =>

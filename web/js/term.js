@@ -12,7 +12,7 @@ const Term = (() => {
   let open = false;
   let history = [], histPos = -1;
 
-  const SCREENS = ['home', 'landing', 'auth', 'onboarding', 'docsSetup', 'map', 'universities', 'shortlist', 'subjects', 'profile', 'today', 'calendar', 'timeline', 'docs', 'admin', 'uni', 'scanJ'];
+  const SCREENS = ['home', 'landing', 'auth', 'onboarding', 'map', 'universities', 'shortlist', 'subjects', 'profile', 'today', 'plan', 'docs', 'admin', 'uni', 'scanJ'];
   const THEME_VALUES = ['dark', 'light'];
   const LANGUAGE_VALUES = ['en', 'ro'];
   const MODE_VALUES = ['explore', 'journey'];
@@ -212,7 +212,7 @@ const Term = (() => {
     '  -- help                 show this tutorial',
     '  go <screen>             jump anywhere. screens:',
     '                            map  universities  shortlist  subjects  profile',
-    '                            today  calendar  timeline  docs',
+    '                            today  plan  docs',
     '                            admin  (admin panel)',
     '  settings:<key>:<value>  change app settings instantly:',
     '                            theme:    dark | light',

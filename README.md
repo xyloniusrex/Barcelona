@@ -93,11 +93,31 @@ Computer Science year-3/spring subjects with precomputed Good/Partial/No-match
 rows. Adding a university = adding it to `server/seed.py` (rows that are
 missing are inserted on the next start; existing databases keep their data).
 
-Demo flow: Landing -> Log in -> Setup -> Documents -> Home -> Map -> University
-detail (with a link to its site) -> Shortlist -> "I got accepted" (day/month/year
-pickers) -> intro -> Home with countdown -> Today / Calendar / Timeline / Scan
-(canned vision-model result; the real model call plugs into `POST /api/scan`,
-API key stays server-side) / Docs / Profile.
+Demo flow: Landing -> Log in -> Setup -> Home -> Map -> University detail (with a
+link to its site) -> Shortlist -> "I got accepted" (day/month/year pickers) ->
+**waiting for approval** (Home shows the request; it checks every 30 s) -> an admin
+approves it in `/#admin` -> intro -> Home with countdown -> Today / Plan (steps +
+calendar) / Documents (Erasmus papers + your ID documents + scans) / Profile.
+The scanner returns a canned vision-model result; the real model call plugs into
+`POST /api/scan`, API key stays server-side.
+
+### Admin
+
+There is no admin *account*: the admin panel is a screen protected by a token.
+
+1. Get the token: `docker compose exec poligo cat /app/data/admin_token.txt`
+   (or set your own with the `POLIGO_ADMIN_TOKEN` environment variable).
+2. Open `http://<host>:8000/#admin` (or press the backquote key and type `admin`).
+3. Paste the token. Tabs: **Approvals** (approve / reject "I got accepted"
+   requests; the student gets a message in Profile), Summary, Logs, Messages.
+
+### On a phone
+
+PoliGo is a PWA: there is nothing to download from a store. Put it on a public
+HTTPS address (see the Cloudflare Tunnel section below; phones only install
+PWAs over HTTPS), open it on the phone, then **Android / Chrome**: menu ->
+*Install app* (or the *Install the app* button in Profile); **iPhone / Safari**:
+Share -> *Add to Home Screen*. It then opens full screen with its own icon.
 
 Romanian lives in `server/i18n_ro.py`; any string missing there simply shows in
 English. To add a language, add a table next to it and register it in `i18n.py`.

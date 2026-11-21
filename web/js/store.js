@@ -18,6 +18,7 @@ const Store = (() => {
     universities: [],
     homeCourses: [],
     mobility: null,
+    pending: null,       // mobility sent for approval, waiting for an admin
     tasks: [],
     screen: 'welcome',
     activeUniId: null,
@@ -56,8 +57,8 @@ const Store = (() => {
   }
 
   function saveLocal() {
-    const { userId, sessionEmail, sessionToken, seenLanding, theme, language, mode, user, mobility, tasks, availability, calView, activeUniId } = state;
-    localStorage.setItem(LS_KEY, JSON.stringify({ userId, sessionEmail, sessionToken, seenLanding, theme, language, mode, user, mobility, tasks, availability, calView, activeUniId }));
+    const { userId, sessionEmail, sessionToken, seenLanding, theme, language, mode, user, mobility, pending, tasks, availability, calView, activeUniId } = state;
+    localStorage.setItem(LS_KEY, JSON.stringify({ userId, sessionEmail, sessionToken, seenLanding, theme, language, mode, user, mobility, pending, tasks, availability, calView, activeUniId }));
     if (state.universities.length) {
       localStorage.setItem(LS_KEY + '-seed', JSON.stringify({ universities: state.universities, homeCourses: state.homeCourses }));
     }
@@ -104,6 +105,7 @@ const Store = (() => {
     state.user = me;
     state.mode = me.mode || 'explore';
     state.mobility = me.mobility || null;
+    state.pending = me.pending || null;
     state.tasks = [];
     if (me.mobility) {
       try { state.tasks = (await api('/api/mobilities/' + me.mobility.id)).tasks; } catch (e) {}
@@ -241,6 +243,7 @@ const Store = (() => {
     state.sessionEmail = null;
     state.user = null;
     state.mobility = null;
+    state.pending = null;
     state.tasks = [];
     state.availability = [];
     state.mode = 'explore';
@@ -272,15 +275,19 @@ const Store = (() => {
     saveLocal();
   }
 
+  // Sends the acceptance for approval: the journey opens once an admin approves it.
   async function accept(payload) {
     const out = await api('/api/accepted', { method: 'POST', body: JSON.stringify(Object.assign({ user_id: state.userId }, payload)) });
-    state.mobility = out.mobility;
-    state.tasks = out.tasks;
-    state.mode = 'journey';
-    state.user = state.user || {};
-    state.user.mode = 'journey';
+    state.pending = out.mobility;
     saveLocal();
     return out;
+  }
+
+  // Re-read the user from the server (e.g. "has my mobility been approved yet?").
+  async function refresh() {
+    await refreshUserState();
+    saveLocal();
+    return state;
   }
 
   async function toggleTask(taskId, done) {
@@ -422,7 +429,7 @@ const Store = (() => {
 
   return {
     state, boot, saveProfile, saveLocal, uniById, score, sortedUnis,
-    addToShortlist, removeFromShortlist, accept, toggleTask, addTask, scan, getScans, getUniversityDetail,
+    addToShortlist, removeFromShortlist, accept, refresh, toggleTask, addTask, scan, getScans, getUniversityDetail,
     requestAuthCode, verifyAuthCode, logout, notify,
     getInbox, replyInbox, markInboxRead, adminApi, getAdminToken, setAdminToken,
     safeUserDocs, addUserDoc, updateUserDoc, deleteUserDoc, saveDocBlob, getDocBlob, deleteDocBlob,
