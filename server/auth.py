@@ -1,4 +1,7 @@
-"""Authentication: UPT-only email sign-up with verification codes.
+"""Authentication: log in with a @student.upt.ro address and a verification code.
+
+There is no separate sign-up: the first successful login with a valid student
+address creates the account. Any other domain is refused.
 
 A 6-digit code is generated per email and stored with an expiry. If SMTP is
 configured (POLIGO_SMTP_* environment variables) the code is emailed; if not,
@@ -13,7 +16,7 @@ import smtplib
 import ssl
 from email.message import EmailMessage
 
-UPT_DOMAINS = ("upt.ro", "e-upt.ro")
+STUDENT_DOMAIN = "student.upt.ro"
 CODE_TTL_MINUTES = 10
 MAX_ATTEMPTS = 5
 
@@ -39,8 +42,9 @@ def smtp_configured() -> bool:
 
 
 def upt_email_ok(email: str) -> bool:
-    domain = email.rsplit("@", 1)[-1].lower()
-    return domain == UPT_DOMAINS[0] or domain == UPT_DOMAINS[1] or domain.endswith(".upt.ro") or domain.endswith(".e-upt.ro")
+    """True only for name@student.upt.ro (exactly one @, non-empty local part)."""
+    local, sep, domain = email.strip().lower().rpartition("@")
+    return bool(sep) and bool(local) and "@" not in local and " " not in email.strip() and domain == STUDENT_DOMAIN
 
 
 def new_code() -> str:

@@ -266,7 +266,7 @@ class VerifyIn(BaseModel):
 def request_code(payload: AuthCodeIn):
     email = payload.email.strip().lower()
     if not authmod.upt_email_ok(email):
-        raise HTTPException(403, {"error": "ERR_NOT_UPT_MAIL", "message": "only @upt.ro student addresses can sign up"})
+        raise HTTPException(403, {"error": "ERR_NOT_UPT_MAIL", "message": "only @student.upt.ro addresses can log in"})
     with db() as conn:
         prev = conn.execute("SELECT created_at FROM auth_codes WHERE email = ?", (email,)).fetchone()
         if prev:
@@ -288,7 +288,7 @@ def request_code(payload: AuthCodeIn):
     except Exception as e:
         raise HTTPException(502, {"error": "ERR_SMTP_SEND", "message": f"could not send the code: {e}"})
     if sent:
-        return {"ok": True, "code_sent": True, "message": "verification code sent to your UPT mail"}
+        return {"ok": True, "code_sent": True, "message": "verification code sent to your student mail"}
     return {"ok": True, "code_sent": False, "dev_code": code,
             "message": "no mail sender is configured - the code is shown here instead"}
 
@@ -418,15 +418,20 @@ class ScanIn(BaseModel):
 
 @app.post("/api/scan")
 def scan(payload: ScanIn):
-    mobility_id = payload.mobility_id
     """Document scanner hook. In the prototype the explanation is a canned
     demo result; the vision-model call plugs in here (server-side, key never
-    in the browser). The image is never stored - only the JSON result."""
+    in the browser). The image is never stored - only the JSON result.
+
+    result_json holds just the explanation (what / steps / deadlines / bring /
+    watch_out / keywords), which is exactly what the client renders."""
+    mobility_id = payload.mobility_id
     doc = seedmod.WELCOME_DOC
     with db() as conn:
+        if not conn.execute("SELECT 1 FROM mobilities WHERE id = ?", (mobility_id,)).fetchone():
+            raise HTTPException(404, {"error": "ERR_NO_MOBILITY", "message": "no active mobility - accept an offer first"})
         cur = conn.execute(
             "INSERT INTO scanned_docs (mobility_id, document_type, language, summary, result_json) VALUES (?,?,?,?,?)",
-            (mobility_id, doc["document_type"], doc["language"], doc["summary"], j(doc)),
+            (mobility_id, doc["document_type"], doc["language"], doc["summary"], j(doc["result"])),
         )
         row = conn.execute("SELECT * FROM scanned_docs WHERE id = ?", (cur.lastrowid,)).fetchone()
     return job(row)

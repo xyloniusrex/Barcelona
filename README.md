@@ -16,13 +16,16 @@ Dockerfile            python:3.12-slim + FastAPI + SQLite + Pillow
 server/
   main.py             thin JSON API + static hosting (all user data -> SQLite)
   db.py               schema + WAL SQLite, single file on a volume
-  seed.py             4 partner universities, courses, precomputed matches
-  anim/render.py      Pillow frame renderers (orthographic globe, arc, pulses)
-  anim/streams.py     MJPEG endpoints: clips render once, then stream from memory
+  auth.py             login with a @student.upt.ro address + 6-digit code (no sign-up)
+  seed.py             8 partner universities, courses, precomputed matches (idempotent)
+  i18n.py, i18n_ro.py server-side translation table (Romanian), refreshed on every request
+  anim/               Pillow MJPEG clips - no longer used by the UI (the intro is drawn on the device)
 web/                  static PWA (no build step): vanilla JS + canvas globe
-  js/globe.js         2D orthographic canvas globe, Natural Earth 110m data
-  js/anim.js          fetches each MJPEG clip once, replays it from device cache
+  js/app.js           screens, router, top bar, Home, intro, all text through T()
+  js/stage.js         every globe scene: page background, Home, Map, journey intro
+  js/globe.js         canvas globe (d3-geo orthographic), Natural Earth 110m data
   js/store.js         state + API client, mirrors user data to localStorage
+  js/term.js          hidden command line (backquote key)
   sw.js               cache policy (see below)
 tools/                map/icon generators (deterministic, committed output)
 ```
@@ -32,7 +35,7 @@ tools/                map/icon generators (deterministic, committed output)
 | Concern | Device | Server |
 | --- | --- | --- |
 | App shell, globe, screens | yes (cached PWA, installs on phone) | static files only |
-| Animations | played back from device cache | Python/Pillow renders each clip once, streams MJPEG |
+| Animations | drawn on the device (vector canvas, sharp at any size) | nothing |
 | Course catalogue + match summaries | cached on first load | SQLite, precomputed |
 | User data (profile, shortlist, mobility, tasks, scans) | offline mirror | SQLite, always authoritative |
 | Document scans | image never leaves the device in the prototype; only the JSON result is stored | hook for the vision model |
@@ -42,8 +45,7 @@ tools/                map/icon generators (deterministic, committed output)
 - **Reused constantly** (shell, map geometry, university/course catalogue,
   animation clips): served once, then `cache-first` in the service worker —
   `poligo-anim-v1` for clips, `poligo-v1-data` for seed endpoints.
-- **One-time use** (transition animation, dots countdown, scan results):
-  rendered/streamed once per device, never re-fetched.
+- **One-time use** (scan results): fetched once per device, never re-fetched.
 - **User data**: always written to SQLite; reads mirror to localStorage so the
   app opens offline with the last known state.
 
@@ -67,22 +69,42 @@ python tools/build_map.py      # web/data/countries-110m.geojson
 python tools/make_icons.py     # web/icons/*.png
 ```
 
+## Using the app
+
+- **Log in**: only `name@student.upt.ro` addresses are accepted, there is no
+  separate sign-up (the first successful login creates the account). Without an
+  SMTP server configured the 6-digit code is shown on screen.
+- **Top bar** (always there): the PoliGo logo takes you to **Home**; next to it
+  the language (RO/EN), the theme (dark/light), the Home button and the Profile
+  button (log out lives in Profile).
+- **Home**: the globe with Romania and your destination, a live countdown in
+  days / hours / minutes and the menu. After "I got accepted" a full-screen intro
+  flies from Timișoara to the partner city and shows up on every launch.
+- **Background**: every screen has the planet behind it; once you open or accept
+  a university it frames Romania and the partner country side by side.
+- Dates are always entered and shown as day.month.year.
+
 ## Data + demo path
 
-Seed partners (E³UDRES² list from the spec): St. Pölten UAS, Instituto
-Politécnico de Setúbal, UC Leuven-Limburg, Vidzeme UAS. Six Computer Science
-year-3/spring subjects with precomputed Good/Partial/No-match rows.
+Partner universities (demo data - confirm the real agreements with the UPT
+Erasmus Office): St. Pölten UAS, Instituto Politécnico de Setúbal,
+UC Leuven-Limburg, Vidzeme UAS, Saxion, Hochschule Fulda, JAMK and MATE. Six
+Computer Science year-3/spring subjects with precomputed Good/Partial/No-match
+rows. Adding a university = adding it to `server/seed.py` (rows that are
+missing are inserted on the next start; existing databases keep their data).
 
-Demo flow: Welcome → Profile → Subjects → Map (globe dot animation) →
-University detail → Shortlist → "I got accepted" (2.2 s Python-rendered
-transition, greeting in the destination language) → Today → Timeline →
-Scan (canned vision-model result; the real model call plugs into
-`POST /api/scan`, API key stays server-side) → Docs.
+Demo flow: Landing -> Log in -> Setup -> Documents -> Home -> Map -> University
+detail (with a link to its site) -> Shortlist -> "I got accepted" (day/month/year
+pickers) -> intro -> Home with countdown -> Today / Calendar / Timeline / Scan
+(canned vision-model result; the real model call plugs into `POST /api/scan`,
+API key stays server-side) / Docs / Profile.
+
+Romanian lives in `server/i18n_ro.py`; any string missing there simply shows in
+English. To add a language, add a table next to it and register it in `i18n.py`.
 
 ## What's intentionally out of scope for the prototype
 
 - Live AI matching of user-uploaded PDFs (hooks exist; matches are precomputed)
-- Email magic-link auth (device-scoped user ids in the prototype)
 - LA-draft PDF export, compare screen, return/recognition screen
 
 ## Expose on a domain (Cloudflare Tunnel)

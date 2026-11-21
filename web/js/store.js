@@ -29,13 +29,17 @@ const Store = (() => {
   }
 
   function loadLocal() {
+    let fresh = true;
     try {
       const raw = localStorage.getItem(LS_KEY);
       if (raw) {
+        fresh = false;
         Object.assign(state, JSON.parse(raw));
         state.screen = 'welcome'; // never restore mid-screen
       }
     } catch (e) { /* fresh device */ }
+    // first visit: speak the browser's language when we have it
+    if (fresh && /^ro(-|$)/i.test(navigator.language || '')) state.language = 'ro';
     try {
       const s = localStorage.getItem(LS_KEY + '-i18n');
       if (s) state.strings = JSON.parse(s) || {};
@@ -52,8 +56,8 @@ const Store = (() => {
   }
 
   function saveLocal() {
-    const { userId, sessionEmail, sessionToken, seenLanding, theme, language, mode, user, mobility, tasks, availability, calView } = state;
-    localStorage.setItem(LS_KEY, JSON.stringify({ userId, sessionEmail, sessionToken, seenLanding, theme, language, mode, user, mobility, tasks, availability, calView }));
+    const { userId, sessionEmail, sessionToken, seenLanding, theme, language, mode, user, mobility, tasks, availability, calView, activeUniId } = state;
+    localStorage.setItem(LS_KEY, JSON.stringify({ userId, sessionEmail, sessionToken, seenLanding, theme, language, mode, user, mobility, tasks, availability, calView, activeUniId }));
     if (state.universities.length) {
       localStorage.setItem(LS_KEY + '-seed', JSON.stringify({ universities: state.universities, homeCourses: state.homeCourses }));
     }
@@ -64,6 +68,7 @@ const Store = (() => {
 
   function applyTheme() {
     document.documentElement.dataset.theme = state.theme === 'light' ? 'light' : 'dark';
+    document.documentElement.lang = state.language === 'ro' ? 'ro' : 'en';
   }
 
   function authHeaders() {
@@ -154,8 +159,11 @@ const Store = (() => {
     return state.strings;
   }
 
-  function t(key) {
-    return (state.strings && state.strings[key]) || key;
+  // t('Added {n}', { n: 3 }) - translated string with {placeholders} filled in
+  function t(key, vars) {
+    let s = (state.strings && state.strings[key]) || key;
+    if (vars) s = s.replace(/\{(\w+)\}/g, (m, k) => (k in vars ? vars[k] : m));
+    return s;
   }
 
   /* ---------- settings ---------- */
@@ -171,10 +179,13 @@ const Store = (() => {
     }).catch(() => {});
   }
 
-  function setLanguage(lang) {
+  async function setLanguage(lang) {
     state.language = lang === 'en' ? 'en' : lang;
     saveLocal();
-    return loadStrings(state.language);
+    const out = await loadStrings(state.language);
+    applyTheme(); // also stamps <html lang>
+    if (state.sessionEmail || state.user) saveProfile({ language: state.language });
+    return out;
   }
 
   /* ---------- availability (calendar day toggles) ---------- */
@@ -234,7 +245,8 @@ const Store = (() => {
     state.availability = [];
     state.mode = 'explore';
     state.userId = newId();
-    state.screen = 'landing';
+    state.seenLanding = false;
+    state.activeUniId = null;
     saveLocal();
     registerDeviceUser();
   }
@@ -288,10 +300,10 @@ const Store = (() => {
     saveLocal();
   }
 
+  // Throws on failure (the caller shows the error); resolves null when there is no mobility.
   async function scan() {
     if (!state.mobility) return null;
-    try { return await api('/api/scan', { method: 'POST', body: JSON.stringify({ mobility_id: state.mobility.id }) }); }
-    catch (e) { return null; }
+    return api('/api/scan', { method: 'POST', body: JSON.stringify({ mobility_id: state.mobility.id }) });
   }
 
   async function getScans() {

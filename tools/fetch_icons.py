@@ -12,9 +12,10 @@ ICONS = {
     "sparkles": "sparkles", "shield-check": "shield-check", "log-out": "log-out",
     "info": "info", "link": "link", "eye": "eye", "arrow-left": "arrow-left",
     "map": "map", "moon": "moon", "bookmark": "bookmark", "activity": "activity",
+    "house": "house", "external-link": "external-link", "clock": "clock",
 }
 
-FLAGS = ["at", "pt", "be", "lv", "ro"]
+FLAGS = ["at", "pt", "be", "lv", "ro", "nl", "de", "fi", "hu"]
 
 LUCIDE = "https://cdn.jsdelivr.net/npm/lucide-static@0.525.0/icons/{name}.svg"
 FLAGS_URL = "https://cdn.jsdelivr.net/npm/flag-icons@7.2.3/flags/4x3/{code}.svg"

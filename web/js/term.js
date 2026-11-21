@@ -12,7 +12,7 @@ const Term = (() => {
   let open = false;
   let history = [], histPos = -1;
 
-  const SCREENS = ['landing', 'auth', 'onboarding', 'docsSetup', 'map', 'universities', 'shortlist', 'subjects', 'profile', 'today', 'calendar', 'timeline', 'docs', 'admin', 'uni', 'scanJ'];
+  const SCREENS = ['home', 'landing', 'auth', 'onboarding', 'docsSetup', 'map', 'universities', 'shortlist', 'subjects', 'profile', 'today', 'calendar', 'timeline', 'docs', 'admin', 'uni', 'scanJ'];
   const THEME_VALUES = ['dark', 'light'];
   const LANGUAGE_VALUES = ['en', 'ro'];
   const MODE_VALUES = ['explore', 'journey'];
@@ -95,6 +95,7 @@ const Term = (() => {
         input.value = history[histPos] || '';
         drawGhost();
       } else if (e.key === 'Escape') {
+        e.preventDefault();   // the document handler below must not also go "back"
         hide();
       }
     });
@@ -192,7 +193,7 @@ const Term = (() => {
   const TUTORIAL = [
     'poligo terminal - what and how',
     '',
-    'summoning this box:      ` (backquote) or ~ - any layout - also ctrl+`, or the >_ button in the top bar',
+    'summoning this box:      ` (backquote) or ~ - any layout - also ctrl+`',
     'closing:                 ` again, or escape',
     '',
     'completion (fish style): while you type, dim ghost text shows the suggestion behind the cursor.',
@@ -316,11 +317,11 @@ const Term = (() => {
       toggle();
       return;
     }
+    if (e.defaultPrevented) return;
     if (open) {
       if (e.key === 'Escape' && document.activeElement !== input) hide();
       return;
     }
-    if (document.activeElement && document.activeElement.id === 'anim') return;
     if (inField) return;
     if (['ArrowDown', 'ArrowUp', 'ArrowLeft', 'ArrowRight'].indexOf(e.key) !== -1) {
       e.preventDefault();
