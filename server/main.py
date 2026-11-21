@@ -5,6 +5,8 @@ API for user data (all of it stored in SQLite), and one-time MJPEG animation
 clips rendered with Pillow. Everything reusable is cached on the device by the
 service worker.
 """
+import asyncio
+import json
 import secrets
 import uuid
 from datetime import date, datetime, timedelta
@@ -19,6 +21,8 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from server import auth as authmod
+from server import jobs as jobsmod
+from server import logs as logsmod
 from server import seed as seedmod
 from server.anim import streams as anim_streams
 from server.db import db, init_db, j, parse
@@ -29,7 +33,13 @@ WEB_DIR = os.path.join(os.path.dirname(__file__), "..", "web")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     seedmod.seed()
+    logsmod.admin_token()
+    jobsmod.run_scheduler_now_on_boot()
+    task = asyncio.create_task(jobsmod.scheduler())
+    logsmod.log_event("INFO", "server", "server started - scheduler running for erasmus scans")
     yield
+    task.cancel()
+    logsmod.log_event("INFO", "server", "server stopped")
 
 
 app = FastAPI(title="PoliGo", version="0.1.0", lifespan=lifespan)
@@ -41,13 +51,19 @@ app.include_router(anim_streams.router)
 @app.exception_handler(HTTPException)
 async def http_error(request, exc: HTTPException):
     if isinstance(exc.detail, dict) and "error" in exc.detail:
+        code = exc.detail.get("error", "ERR_HTTP")
+        level = "ERROR" if exc.status_code >= 500 else "WARN"
+        logsmod.log_event(level, "http", f"{request.method} {request.url.path} -> {exc.status_code} {code}", detail=str(exc.detail.get("message", "")))
         return JSONResponse(status_code=exc.status_code, content=exc.detail)
     code = f"ERR_HTTP_{exc.status_code}"
+    level = "WARN" if exc.status_code < 500 else "ERROR"
+    logsmod.log_event(level, "http", f"{request.method} {request.url.path} -> {exc.status_code}", detail=str(exc.detail))
     return JSONResponse(status_code=exc.status_code, content={"error": code, "message": str(exc.detail)})
 
 
 @app.exception_handler(Exception)
 async def unhandled_error(request, exc: Exception):
+    logsmod.log_event("ERROR", "http", f"{request.method} {request.url.path} crashed", detail=f"{type(exc).__name__}: {exc}")
     return JSONResponse(status_code=500, content={"error": "ERR_INTERNAL", "message": f"{type(exc).__name__}: {exc}"})
 
 
@@ -194,6 +210,7 @@ def update_user(uid: str, user: UserIn, request: Request):
             _get_user(conn, uid)
             sets = ", ".join(f"{k} = ?" for k in fields)
             conn.execute(f"UPDATE users SET {sets} WHERE id = ?", (*fields.values(), uid))
+            logsmod.log_event("INFO", "user", "profile fields updated", user_id=uid, detail=json.dumps(fields, default=str), conn=conn)
     return {"ok": True}
 
 
@@ -262,6 +279,7 @@ def request_code(payload: AuthCodeIn):
             "INSERT OR REPLACE INTO auth_codes (email, code, expires_at, attempts, created_at) VALUES (?,?,?,0,?)",
             (email, code, expires_at, datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")),
         )
+    logsmod.log_event("INFO", "auth", f"code requested for {email}", detail="sent_by_smtp=pending")
     sent, detail = True, ""
     try:
         sent, detail = authmod.send_code(email, code)
@@ -300,6 +318,7 @@ def verify(payload: VerifyIn):
                 conn.execute("DELETE FROM auth_codes WHERE email = ?", (email,))
                 raise HTTPException(403, {"error": "ERR_TOO_MANY_TRIES", "message": "too many wrong codes - request a new one"})
             conn.execute("UPDATE auth_codes SET attempts = attempts + 1 WHERE email = ?", (email,))
+            logsmod.log_event("WARN", "auth", f"wrong code for {email}", detail=f"tries_left={left}", conn=conn)
             raise HTTPException(403, {"error": "ERR_WRONG_CODE", "message": f"wrong code - {left} tries left"})
         conn.execute("DELETE FROM auth_codes WHERE email = ?", (email,))
         existing = conn.execute("SELECT * FROM users WHERE email = ?", (email,)).fetchone()
@@ -309,6 +328,7 @@ def verify(payload: VerifyIn):
         token = secrets.token_urlsafe(32)
         conn.execute("INSERT INTO sessions (token, user_id) VALUES (?,?)", (token, existing["id"]))
         user = job(existing)
+    logsmod.log_event("INFO", "auth", "user signed in via mail verification", user_id=user["id"], detail=f"email={email}")
     return {"ok": True, "token": token, "user": user}
 
 
@@ -347,6 +367,8 @@ def accepted(payload: AcceptedIn, request: Request):
             "INSERT INTO tasks (mobility_id, title, stage, due_date, source, done) VALUES (?,?,?,?,?,?)",
             _tasks_from_template(mid, payload.start_date, arrival, payload.end_date),
         )
+        logsmod.log_event("INFO", "user", f"accepted mobility at {payload.university_id}", user_id=payload.user_id,
+                          detail=f"start={payload.start_date} end={payload.end_date}", conn=conn)
         tasks = [job(r) for r in conn.execute("SELECT * FROM tasks WHERE mobility_id = ? ORDER BY due_date", (mid,))]
         mob = job(conn.execute("SELECT * FROM mobilities WHERE id = ?", (mid,)).fetchone())
     return {"mobility": mob, "tasks": tasks}
@@ -503,6 +525,140 @@ def get_strings(lang: str):
 def deadlines():
     """Project paperwork deadlines (static seed data, client caches it)."""
     return {"deadlines": seedmod.PROJECT_DEADLINES}
+
+
+
+def _require_admin(request: Request):
+    header = request.headers.get("authorization", "")
+    if not header.lower().startswith("bearer "):
+        raise HTTPException(401, {"error": "ERR_NO_TOKEN", "message": "admin token required - set it in the admin tab"})
+    if header[7:].strip() != logsmod.admin_token():
+        raise HTTPException(403, {"error": "ERR_BAD_TOKEN", "message": "admin token is invalid"})
+
+
+@app.get("/api/admin/summary")
+def admin_summary(request: Request):
+    _require_admin(request)
+    with db() as conn:
+        counts = {
+            "users": conn.execute("SELECT COUNT(*) FROM users").fetchone()[0],
+            "sessions": conn.execute("SELECT COUNT(*) FROM sessions").fetchone()[0],
+            "user_docs": conn.execute("SELECT COUNT(*) FROM user_docs").fetchone()[0],
+            "mobilities": conn.execute("SELECT COUNT(*) FROM mobilities").fetchone()[0],
+            "errors_24h": conn.execute(
+                "SELECT COUNT(*) FROM logs WHERE level = 'ERROR' AND ts >= datetime('now', '-1 day')"
+            ).fetchone()[0],
+            "warn_24h": conn.execute(
+                "SELECT COUNT(*) FROM logs WHERE level = 'WARN' AND ts >= datetime('now', '-1 day')"
+            ).fetchone()[0],
+        }
+        recent = conn.execute(
+            "SELECT ts, user_id, event FROM logs WHERE category = 'auth' AND level = 'INFO' ORDER BY id DESC LIMIT 10"
+        ).fetchall()
+    scan = jobsmod.last_scan()
+    return {
+        "uptime": logsmod.uptime_text(),
+        "counts": counts,
+        "recent_signins": [dict(r) for r in recent],
+        "last_scan": scan,
+    }
+
+
+@app.get("/api/admin/logs")
+def admin_logs(request: Request, limit: int = 200, level: str = ""):
+    _require_admin(request)
+    return {"logs": logsmod.get_logs(limit=limit, level=level)}
+
+
+class MessageIn(BaseModel):
+    text: str
+    to_user: str | None = None
+
+
+@app.get("/api/admin/messages")
+def admin_messages(request: Request):
+    _require_admin(request)
+    with db() as conn:
+        rows = conn.execute(
+            "SELECT m.*, u2.email AS to_email, u3.email AS from_email "
+            "FROM messages m LEFT JOIN users u2 ON u2.id = m.to_user LEFT JOIN users u3 ON u3.id = m.from_user "
+            "ORDER BY m.id DESC LIMIT 200"
+        ).fetchall()
+    return {"messages": [{**dict(r), "to_email": r["to_email"], "from_email": r["from_email"]} for r in rows]}
+
+
+@app.post("/api/admin/messages")
+def admin_send(msg: MessageIn, request: Request):
+    _require_admin(request)
+    text = msg.text.strip()
+    if not text:
+        raise HTTPException(400, {"error": "ERR_EMPTY_MESSAGE", "message": "nothing to send"})
+    with db() as conn:
+        if msg.to_user:
+            row = conn.execute("SELECT id FROM users WHERE id = ?", (msg.to_user,)).fetchone()
+            if not row:
+                raise HTTPException(404, {"error": "ERR_NO_USER", "message": "unknown recipient"})
+            conn.execute(
+                "INSERT INTO messages (ts, from_admin, to_user, text) VALUES (?,?,?,?)",
+                (logsmod.now(), 1, msg.to_user, text),
+            )
+            target = f"user {msg.to_user}"
+        else:
+            conn.execute("INSERT INTO messages (ts, from_admin, text) VALUES (?,?,?)", (logsmod.now(), 1, text))
+            target = "all users (broadcast)"
+    logsmod.log_event("INFO", "admin", f"message sent to {target}", detail=text[:200])
+    return {"ok": True}
+
+
+@app.post("/api/admin/scan")
+def admin_scan(request: Request):
+    _require_admin(request)
+    out = jobsmod.scan_opportunities()
+    return {"ok": True, "scan": out}
+
+
+@app.get("/api/inbox/{user_id}")
+def inbox(user_id: str):
+    with db() as conn:
+        rows = conn.execute(
+            "SELECT id, ts, from_admin, to_user, text, read FROM messages "
+            "WHERE to_user = ? OR (from_admin = 1 AND to_user IS NULL) ORDER BY id DESC LIMIT 50",
+            (user_id,),
+        ).fetchall()
+        unread = conn.execute(
+            "SELECT COUNT(*) FROM messages WHERE read = 0 AND (to_user = ? OR (from_admin = 1 AND to_user IS NULL))",
+            (user_id,),
+        ).fetchone()[0]
+    return {"messages": [dict(r) for r in rows], "unread": unread}
+
+
+class ReplyIn(BaseModel):
+    text: str
+
+
+@app.post("/api/inbox/{user_id}/reply")
+def inbox_reply(user_id: str, payload: ReplyIn):
+    text = payload.text.strip()
+    if not text:
+        raise HTTPException(400, {"error": "ERR_EMPTY_MESSAGE", "message": "nothing to send"})
+    with db() as conn:
+        conn.execute(
+            "INSERT INTO messages (ts, from_admin, to_user, from_user, text) VALUES (?,0,NULL,?,?)",
+            (logsmod.now(), user_id, text),
+        )
+        uid = user_id[:8] + "..." if len(user_id) > 8 else user_id
+    logsmod.log_event("INFO", "inbox", f"user reply {uid}", user_id=user_id, detail=text[:200])
+    return {"ok": True}
+
+
+@app.post("/api/inbox/{user_id}/read")
+def inbox_read(user_id: str):
+    with db() as conn:
+        conn.execute(
+            "UPDATE messages SET read = 1 WHERE to_user = ? OR (from_admin = 1 AND to_user IS NULL)",
+            (user_id,),
+        )
+    return {"ok": True}
 
 
 @app.get("/api/health")

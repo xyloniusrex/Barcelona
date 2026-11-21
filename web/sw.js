@@ -8,13 +8,13 @@
  *    scans) so journeys still open offline.
  *  - never cached: writes (POST/PATCH/DELETE).
  */
-const VERSION = 'poligo-v4';
+const VERSION = 'poligo-v5';
 const SHELL = VERSION + '-shell';
 const DATA = VERSION + '-data';
 
 const PRECACHE = [
   '/', '/index.html', '/styles/app.css',
-  '/js/icons.js', '/js/store.js', '/js/anim.js', '/js/app.js',
+  '/js/icons.js', '/js/store.js', '/js/anim.js', '/js/term.js', '/js/app.js',
   '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png',
 ];
 

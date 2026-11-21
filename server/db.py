@@ -133,7 +133,32 @@ CREATE TABLE IF NOT EXISTS sessions (
     user_id TEXT NOT NULL REFERENCES users(id),
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
-CREATE INDEX IF NOT EXISTS idx_matches_uni ON matches(university_id);
+CREATE TABLE IF NOT EXISTS logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts TEXT NOT NULL,
+    level TEXT NOT NULL,
+    category TEXT NOT NULL,
+    user_id TEXT,
+    event TEXT NOT NULL,
+    detail TEXT
+);
+CREATE TABLE IF NOT EXISTS messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts TEXT NOT NULL,
+    from_admin INTEGER NOT NULL DEFAULT 0,
+    to_user TEXT,
+    from_user TEXT,
+    text TEXT NOT NULL,
+    read INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS opportunity_scans (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_at TEXT NOT NULL,
+    count INTEGER NOT NULL,
+    detail_json TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_logs_ts ON logs(id);
+CREATE INDEX IF NOT EXISTS idx_messages_to ON messages(to_user);
 CREATE INDEX IF NOT EXISTS idx_tasks_mob ON tasks(mobility_id);
 """
 
@@ -184,6 +209,14 @@ MIGRATIONS = [
     "CREATE TABLE IF NOT EXISTS sessions ("
     " token TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id),"
     " created_at TEXT NOT NULL DEFAULT (datetime('now')))",
+    "CREATE TABLE IF NOT EXISTS logs ("
+    " id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL, level TEXT NOT NULL,"
+    " category TEXT NOT NULL, user_id TEXT, event TEXT NOT NULL, detail TEXT)",
+    "CREATE TABLE IF NOT EXISTS messages ("
+    " id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL, from_admin INTEGER NOT NULL DEFAULT 0,"
+    " to_user TEXT, from_user TEXT, text TEXT NOT NULL, read INTEGER NOT NULL DEFAULT 0)",
+    "CREATE TABLE IF NOT EXISTS opportunity_scans ("
+    " id INTEGER PRIMARY KEY AUTOINCREMENT, run_at TEXT NOT NULL, count INTEGER NOT NULL, detail_json TEXT)",
 ]
 
 
