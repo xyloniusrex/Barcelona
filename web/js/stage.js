@@ -168,13 +168,15 @@ const Stage = (() => {
       (!quality || tier(u) === quality));
   }
 
-  function partnerPoints(unis, labelFirst) {
+  function partnerPoints(unis, labelFirst, pulseHome = true) {
     const COLORS = window.PoliGlobe.COLORS;
     const pts = unis.map((u, i) => Object.assign({
       id: u.id, lon: u.lng, lat: u.lat, color: COLORS[tier(u)],
       label: u.city, showLabel: i < labelFirst, clickable: true,
     }, LABEL_POS[u.id] || {}));
-    pts.push({ id: null, lon: HOME.lon, lat: HOME.lat, color: COLORS.cyan, r: 4, pulse: true, label: HOME.name, showLabel: true, dx: 6, dy: 18, clickable: false });
+    // a pulsing marker forces a locked-down, non-draggable globe (the Map screen)
+    // to keep redrawing every frame - only animate it where that is the point (Home).
+    pts.push({ id: null, lon: HOME.lon, lat: HOME.lat, color: COLORS.cyan, r: 4, pulse: pulseHome, label: HOME.name, showLabel: true, dx: 6, dy: 18, clickable: false });
     return pts;
   }
 
@@ -191,7 +193,9 @@ const Stage = (() => {
     tip.hidden = false;
   }
 
-  /* The interactive globe on the Map screen, inserted before `anchor`. */
+  /* The Map screen's globe: a fixed, locked-down view of Europe - no drag, no
+   * zoom, no pulsing marker - so it only redraws when the point list changes
+   * or something is hovered, instead of looping a full redraw every frame. */
   function mapGlobe(anchor, onPick) {
     if (!ready()) return null;
     const { Globe, COLORS } = window.PoliGlobe;
@@ -208,8 +212,8 @@ const Stage = (() => {
     const globe = new Globe(box, {
       center: [14, 49], theme: isLight() ? 'light' : 'dark',
       radius: (w, h) => Math.max(w, h) * 0.95,
-      touchAction: 'pan-y',            // vertical swipes still scroll the page
-      label: T('Globe with partner universities'),
+      drag: false, static: true, touchAction: 'auto',
+      label: T('Map of Europe with partner universities'),
       onClick: p => { if (p && p.id && onPick) onPick(p.id); },
       onHover: p => showTip(box, tip, globe, p),
     });
@@ -225,7 +229,7 @@ const Stage = (() => {
     const sig = unis.map(u => u.id + ':' + tier(u)).join('|');
     if (sig === box._sig) return;
     box._sig = sig;
-    box._globe.setPoints(partnerPoints(unis, 4));
+    box._globe.setPoints(partnerPoints(unis, 4, false));
   }
 
   /* The globe on the Home screen. `uni` chosen -> both countries and the arc;

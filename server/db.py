@@ -157,9 +157,22 @@ CREATE TABLE IF NOT EXISTS opportunity_scans (
     count INTEGER NOT NULL,
     detail_json TEXT
 );
+CREATE TABLE IF NOT EXISTS erasmus_source_checks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts TEXT NOT NULL,
+    country TEXT NOT NULL,
+    agency TEXT NOT NULL,
+    url TEXT NOT NULL,
+    ok INTEGER NOT NULL DEFAULT 0,
+    digest TEXT,
+    snippet TEXT,
+    error TEXT,
+    changed INTEGER NOT NULL DEFAULT 0
+);
 CREATE INDEX IF NOT EXISTS idx_logs_ts ON logs(id);
 CREATE INDEX IF NOT EXISTS idx_messages_to ON messages(to_user);
 CREATE INDEX IF NOT EXISTS idx_tasks_mob ON tasks(mobility_id);
+CREATE INDEX IF NOT EXISTS idx_erasmus_checks_country ON erasmus_source_checks(country, id);
 """
 
 
@@ -217,6 +230,11 @@ MIGRATIONS = [
     " to_user TEXT, from_user TEXT, text TEXT NOT NULL, read INTEGER NOT NULL DEFAULT 0)",
     "CREATE TABLE IF NOT EXISTS opportunity_scans ("
     " id INTEGER PRIMARY KEY AUTOINCREMENT, run_at TEXT NOT NULL, count INTEGER NOT NULL, detail_json TEXT)",
+    "CREATE TABLE IF NOT EXISTS erasmus_source_checks ("
+    " id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL, country TEXT NOT NULL, agency TEXT NOT NULL,"
+    " url TEXT NOT NULL, ok INTEGER NOT NULL DEFAULT 0, digest TEXT, snippet TEXT, error TEXT,"
+    " changed INTEGER NOT NULL DEFAULT 0)",
+    "CREATE INDEX IF NOT EXISTS idx_erasmus_checks_country ON erasmus_source_checks(country, id)",
 ]
 
 

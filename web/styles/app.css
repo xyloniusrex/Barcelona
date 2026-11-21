@@ -570,16 +570,11 @@ body.no-scroll { overflow: hidden; }
 }
 .chip:hover { color: var(--text); }
 .chip.on { color: var(--accent-live); background: var(--accent-soft); border-color: var(--accent-line); }
-#filters {
-  flex-wrap: nowrap;
-  overflow-x: auto;
-  scrollbar-width: none;
-  margin-right: -4px;
-  padding-right: 24px;
-  -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent);
-  mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent);
-}
-#filters::-webkit-scrollbar { display: none; }
+
+/* map filters: a few short dropdowns instead of a long row of chips */
+.filter-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 14px; }
+.filter-grid select { min-height: 42px; padding: 0 36px 0 12px; font-size: 13.5px; }
+.filter-grid .sel-ico { width: 16px; height: 16px; }
 
 /* ---------------------------------------------------- pills, badges, due */
 .pill, .due {
@@ -985,6 +980,7 @@ body:has(> .sheet)::before { content: ""; position: fixed; inset: 0; z-index: 29
 }
 .globe-canvas { display: block; cursor: grab; user-select: none; -webkit-user-select: none; }
 .globe-canvas.grabbing { cursor: grabbing; }
+#map-globe .globe-canvas { cursor: default; }   /* fixed on Europe, not draggable */
 .legend {
   position: absolute;
   top: 12px; right: 12px;
@@ -1133,7 +1129,6 @@ body:has(> .sheet)::before { content: ""; position: fixed; inset: 0; z-index: 29
   }
   body[data-screen="map"] .card:has(> .globe-box) > #filters { grid-area: filters; }
   body[data-screen="map"] .card:has(> .globe-box) > #uni-list { grid-area: list; }
-  #filters { flex-wrap: wrap; overflow: visible; padding-right: 0; margin-right: 0; -webkit-mask-image: none; mask-image: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
