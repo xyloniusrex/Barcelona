@@ -36,7 +36,8 @@ WEB_DIR = os.path.join(os.path.dirname(__file__), "..", "web")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     seedmod.seed()
-    logsmod.admin_token()
+    token = logsmod.admin_token()
+    print(f"\n{'=' * 60}\nADMIN TOKEN: {token}\n{'=' * 60}\n", flush=True)
     jobsmod.run_scheduler_now_on_boot()
     task = asyncio.create_task(jobsmod.scheduler())
     asyncio.create_task(jobsmod.run_extra_jobs())  # site watcher + cleanup; backgrounded so slow sites never delay startup

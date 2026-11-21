@@ -1216,23 +1216,63 @@ const App = (() => {
     return f >= 0.6 ? 'good' : f >= 0.3 ? 'partial' : 'weak';
   }
 
-  // Two dropdowns: language and country.
+  // Filter buttons: hidden by default, each one opens a chip panel of its
+  // own options when pressed (and closes any other open panel).
   function buildFilters(el, onChange) {
     const langs = [...new Set(Store.state.universities.flatMap(u => u.languages || []))].sort();
     const countries = [...new Set(Store.state.universities.map(u => u.country))].sort();
+    const regions = [...new Set(countries.map(regionOf))].sort();
     const f = Store.state.filters;
-    f.region = null; f.quality = null;   // no longer offered - drop any value saved from before
-    const selectOf = (kind, allLabel, options) =>
-      '<div class="select-wrap"><select data-filter="' + kind + '">' +
-      '<option value="">' + esc(allLabel) + '</option>' +
-      options.map(([value, label]) => '<option value="' + esc(value) + '" ' + (f[kind] === value ? 'selected' : '') + '>' + esc(label) + '</option>').join('') +
-      '</select>' + icon('chevron-down', 'sel-ico') + '</div>';
-    el.innerHTML = '<div class="filter-grid">' +
-      selectOf('lang', T('All languages'), langs.map(l => [l, T(l)])) +
-      selectOf('country', T('All countries'), countries.map(c => [c, T(c)])) +
-      '</div>';
-    el.querySelectorAll('select[data-filter]').forEach(sel => {
-      sel.onchange = () => { f[sel.dataset.filter] = sel.value || null; onChange(); };
+    f.quality = null;   // no longer offered - drop any value saved from before
+    const groups = [
+      ['lang', T('Language'), langs.map(l => [l, T(l)])],
+      ['country', T('Country'), countries.map(c => [c, T(c)])],
+      ['region', T('Region'), regions.map(r => [r, T(r)])],
+    ];
+    const current = (kind, label, options) => {
+      const v = f[kind];
+      const hit = v && options.find(([value]) => value === v);
+      return hit ? hit[1] : label;
+    };
+    el.innerHTML =
+      '<div class="filter-row">' +
+      groups.map(([kind, label, options]) =>
+        '<button class="filter-btn' + (f[kind] ? ' on' : '') + '" data-filter-btn="' + kind + '" aria-expanded="false">' +
+        '<span>' + esc(current(kind, label, options)) + '</span>' + icon('chevron-down', 'sm-ico') +
+        '</button>'
+      ).join('') +
+      '</div>' +
+      groups.map(([kind, , options]) =>
+        '<div class="chips filter-options" data-filter-panel="' + kind + '" hidden>' +
+        '<button class="chip' + (!f[kind] ? ' on' : '') + '" data-filter="' + kind + '" data-value="">' + esc(T('All')) + '</button>' +
+        options.map(([value, label]) => '<button class="chip' + (f[kind] === value ? ' on' : '') + '" data-filter="' + kind + '" data-value="' + esc(value) + '">' + esc(label) + '</button>').join('') +
+        '</div>'
+      ).join('');
+    el.querySelectorAll('[data-filter-btn]').forEach(btn => {
+      btn.onclick = () => {
+        const kind = btn.dataset.filterBtn;
+        const panel = el.querySelector('[data-filter-panel="' + kind + '"]');
+        const willOpen = panel.hidden;
+        el.querySelectorAll('[data-filter-panel]').forEach(p => { p.hidden = true; });
+        el.querySelectorAll('[data-filter-btn]').forEach(b => b.setAttribute('aria-expanded', 'false'));
+        panel.hidden = !willOpen;
+        btn.setAttribute('aria-expanded', String(willOpen));
+      };
+    });
+    el.querySelectorAll('[data-filter]').forEach(chip => {
+      chip.onclick = () => {
+        const kind = chip.dataset.filter;
+        const value = chip.dataset.value || null;
+        f[kind] = value;
+        const panel = el.querySelector('[data-filter-panel="' + kind + '"]');
+        panel.querySelectorAll('[data-filter]').forEach(c => c.classList.toggle('on', (c.dataset.value || null) === value));
+        panel.hidden = true;
+        const btn = el.querySelector('[data-filter-btn="' + kind + '"]');
+        btn.setAttribute('aria-expanded', 'false');
+        btn.classList.toggle('on', !!value);
+        btn.querySelector('span').textContent = value ? chip.textContent : groups.find(g => g[0] === kind)[1];
+        onChange();
+      };
     });
   }
 
