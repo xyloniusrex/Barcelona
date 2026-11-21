@@ -1332,7 +1332,7 @@ const App = (() => {
     const tokenInput = wrap.querySelector('#ad-token');
     tokenInput.value = token;
 
-    const getTok = () => tokenInput.value.trim();
+    const getTok = () => tokenInput.value.replace(/[^\x20-\x7E]/g, '').trim();
 
     async function load() {
       const tok = getTok();
