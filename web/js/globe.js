@@ -34,7 +34,7 @@ class Globe {
     this.o = {
       center: [12, 48], zoom: 1, minZoom: 0.45, maxZoom: 4,
       radius: (w, h) => Math.max(w, h) * 0.95, offsetY: 0,
-      autoRotate: 0, interactive: true, touchAction: 'none', halo: COLORS.cyan,
+      autoRotate: 0, interactive: true, drag: true, touchAction: 'none', halo: COLORS.cyan,
       static: false, theme: 'dark', ...opts,
     };
     this.palette = PALETTES[this.o.theme === 'light' ? 'light' : 'dark'];
@@ -126,13 +126,14 @@ class Globe {
       this.pointers.set(e.pointerId, pos(e));
       this.down = { p: pos(e), moved: 0, t: performance.now() };
       this.vel = [0, 0]; this.idleUntil = performance.now() + 4000; this.anim = null;
-      c.classList.add('grabbing');
+      if (this.o.drag) c.classList.add('grabbing');
     });
     c.addEventListener('pointermove', e => {
       const p = pos(e);
       if (!this.pointers.has(e.pointerId)) { if (e.pointerType === 'mouse') this.setHover(this.hit(p, 14)); return; }
       const prev = this.pointers.get(e.pointerId);
       this.pointers.set(e.pointerId, p);
+      if (!this.o.drag) return;   // click/hover still work; rotating and zooming are locked
       if (this.pointers.size === 2) {
         const [a, b] = [...this.pointers.values()];
         const d = Math.hypot(a[0] - b[0], a[1] - b[1]);
@@ -162,6 +163,7 @@ class Globe {
     c.addEventListener('pointercancel', up);
     c.addEventListener('pointerleave', () => { if (!this.pointers.size) this.setHover(null); });
     c.addEventListener('wheel', e => {
+      if (!this.o.drag) return;   // let the page scroll normally instead of zooming
       e.preventDefault();
       this.zoom = clamp(this.zoom * Math.exp(-e.deltaY * 0.0015), this.o.minZoom, this.o.maxZoom);
       this.idleUntil = performance.now() + 4000;
@@ -171,6 +173,7 @@ class Globe {
   setHover(p) {
     if (p === this.hover) return;
     this.hover = p; this.canvas.style.cursor = p ? 'pointer' : '';
+    this.dirty = true;   // hover changes the drawn point radius - matters for static globes too
     this.onHover?.(p);
   }
 

@@ -111,6 +111,8 @@ RO = {
     "Eastern Europe": "Europa de Est", "Southeastern Europe": "Europa de Sud-Est",
     # "Other" is already translated above (documents section) and reused here as the fallback region name
     "All regions": "Toate regiunile",
+    "All countries": "Toate țările",
+    "Any match": "Orice potrivire",
     "Continue": "Continuă",
     "Start": "Începe",
     "Semester exchange": "Schimb pe un semestru",
@@ -133,6 +135,7 @@ RO = {
     "Browse other universities": "Răsfoiește alte universități",
     "Globe showing Romania and your destination": "Glob cu România și destinația ta",
     "Globe with partner universities": "Glob cu universitățile partenere",
+    "Map of Europe with partner universities": "Harta Europei cu universitățile partenere",
     "days": "zile",
     "hours": "ore",
     "minutes": "minute",

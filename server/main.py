@@ -21,6 +21,8 @@ from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
 
 from server import auth as authmod
+from server import cleanup as cleanupmod
+from server import finder as findermod
 from server import ical as icalmod
 from server import jobs as jobsmod
 from server import logs as logsmod
@@ -37,6 +39,7 @@ async def lifespan(app: FastAPI):
     logsmod.admin_token()
     jobsmod.run_scheduler_now_on_boot()
     task = asyncio.create_task(jobsmod.scheduler())
+    asyncio.create_task(jobsmod.run_extra_jobs())  # site watcher + cleanup; backgrounded so slow sites never delay startup
     logsmod.log_event("INFO", "server", "server started - scheduler running for erasmus scans")
     yield
     task.cancel()
@@ -698,6 +701,27 @@ def admin_scan(request: Request):
     _require_admin(request)
     out = jobsmod.scan_opportunities()
     return {"ok": True, "scan": out}
+
+
+@app.get("/api/admin/erasmus-sources")
+def admin_erasmus_sources(request: Request):
+    """Latest check per official national Erasmus+ site (server/finder.py)."""
+    _require_admin(request)
+    return {"sources": findermod.latest()}
+
+
+@app.post("/api/admin/erasmus-sources/scan")
+def admin_erasmus_sources_scan(request: Request):
+    _require_admin(request)
+    return {"ok": True, "sources": findermod.scan_sources()}
+
+
+@app.post("/api/admin/cleanup")
+def admin_cleanup(request: Request):
+    """Deletes expired data now (server/cleanup.py) instead of waiting for the
+    scheduled run."""
+    _require_admin(request)
+    return {"ok": True, **cleanupmod.cleanup_expired()}
 
 
 @app.get("/api/inbox/{user_id}")

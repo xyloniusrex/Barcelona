@@ -1236,30 +1236,26 @@ const App = (() => {
     return f >= 0.6 ? 'good' : f >= 0.3 ? 'partial' : 'weak';
   }
 
+  // Four dropdowns instead of a wall of chips - same filters, far less to scan.
   function buildFilters(el, onChange) {
-    const langs = [...new Set(Store.state.universities.flatMap(u => u.languages || []))];
-    const countries = [...new Set(Store.state.universities.map(u => u.country))];
-    const regions = [...new Set(countries.map(regionOf))];
-    el.innerHTML = '';
+    const langs = [...new Set(Store.state.universities.flatMap(u => u.languages || []))].sort();
+    const countries = [...new Set(Store.state.universities.map(u => u.country))].sort();
+    const regions = [...new Set(countries.map(regionOf))].sort();
     const f = Store.state.filters;
-    const make = (label, kind, value) => {
-      const on = f[kind] === value;
-      const chip = h('<button class="chip ' + (on ? 'on' : '') + '">' + esc(label) + '</button>');
-      chip.onclick = () => {
-        f[kind] = f[kind] === value ? null : value;
-        buildFilters(el, onChange);
-        onChange();
-      };
-      el.appendChild(chip);
-    };
-    make(T('All languages'), 'lang', null);
-    for (const l of langs) make(T(l), 'lang', l);
-    make(T('All regions'), 'region', null);
-    for (const r of regions) make(T(r), 'region', r);
-    for (const c of countries) make(T(c), 'country', c);
-    make(T('Good match'), 'quality', 'good');
-    make(T('Partial match'), 'quality', 'partial');
-    make(T('No match'), 'quality', 'weak');
+    const selectOf = (kind, allLabel, options) =>
+      '<div class="select-wrap"><select data-filter="' + kind + '">' +
+      '<option value="">' + esc(allLabel) + '</option>' +
+      options.map(([value, label]) => '<option value="' + esc(value) + '" ' + (f[kind] === value ? 'selected' : '') + '>' + esc(label) + '</option>').join('') +
+      '</select>' + icon('chevron-down', 'sel-ico') + '</div>';
+    el.innerHTML = '<div class="filter-grid">' +
+      selectOf('lang', T('All languages'), langs.map(l => [l, T(l)])) +
+      selectOf('region', T('All regions'), regions.map(r => [r, T(r)])) +
+      selectOf('country', T('All countries'), countries.map(c => [c, T(c)])) +
+      selectOf('quality', T('Any match'), [['good', T('Good match')], ['partial', T('Partial match')], ['weak', T('No match')]]) +
+      '</div>';
+    el.querySelectorAll('select[data-filter]').forEach(sel => {
+      sel.onchange = () => { f[sel.dataset.filter] = sel.value || null; onChange(); };
+    });
   }
 
   function viewMap(root) {
@@ -1271,7 +1267,7 @@ const App = (() => {
       ? '<p class="hint">' + esc(T('max 3, in order of preference')) + '</p>' +
         '<p class="hint" id="fav-empty" hidden>' + esc(T('Nothing here yet. Open a university and tap "Favorite".')) + '</p>' +
         '<div id="sl-list"></div>'
-      : '<div class="chips" id="filters"></div><div id="uni-list"></div>';
+      : '<div id="filters"></div><div id="uni-list"></div>';
     const wrap = h('<div class="screen panel">' +
       '<div class="card">' +
       '<p class="section-label">' + esc(T('Map')) + '</p>' +
@@ -1972,6 +1968,7 @@ const App = (() => {
       '<div class="scan-cards">' +
       '<button class="ghost" data-tab="approvals">Approvals</button>' +
       '<button class="ghost" data-tab="summary">Summary</button>' +
+      '<button class="ghost" data-tab="sources">Sources</button>' +
       '<button class="ghost" data-tab="logs">Logs</button>' +
       '<button class="ghost" data-tab="messages">Messages</button>' +
       '</div>' +
@@ -2029,7 +2026,49 @@ const App = (() => {
               (o.is_new ? ' <span class="badge due">New</span>' : '') + '</span><br/>' +
               '<span class="doc-meta">ECTS match ' + Math.round(o.score * 100) + '% (' + o.ects_matched + '/' + o.courses + ' courses)</span></span></div>').join('') : '') +
             '<p class="section-label" style="margin-top:10px">Recent sign-ins</p>' +
-            ((out.recent_signins || []).map(r => '<p class="meta">' + esc(r.ts) + ' - ' + esc(String(r.user_id).slice(0, 8)) + ' - ' + esc(r.event) + '</p>').join('') || '<p class="meta">none</p>');
+            ((out.recent_signins || []).map(r => '<p class="meta">' + esc(r.ts) + ' - ' + esc(String(r.user_id).slice(0, 8)) + ' - ' + esc(r.event) + '</p>').join('') || '<p class="meta">none</p>') +
+            '<p class="section-label" style="margin-top:10px">Maintenance</p>' +
+            '<p class="hint" style="margin:0 0 8px">Deletes expired identity documents (ID/passport/EHIC past their expiry date) right now, instead of waiting for the scheduled run. Login codes are not affected.</p>' +
+            '<button class="ghost" id="ad-cleanup">Delete expired documents now</button>';
+          body.querySelector('#ad-cleanup').onclick = async () => {
+            try {
+              const res = await Store.adminApi('/api/admin/cleanup', { method: 'POST', body: 'null' }, getTok());
+              toast(res.deleted ? 'Deleted ' + res.deleted + ' expired document(s)' : 'Nothing expired to delete');
+              load();
+            } catch (e) { body.insertAdjacentHTML('afterbegin', '<p class="meta log-error">' + esc((e.code || 'ERR') + ': ' + e.message) + '</p>'); }
+          };
+        } else if (tab === 'sources') {
+          const out = await Store.adminApi('/api/admin/erasmus-sources', {}, tok);
+          const list = out.sources || [];
+          body.innerHTML =
+            '<p class="hint" style="margin:0 0 10px">Checks each partner country\'s official Erasmus+ site for changes - it cannot reliably parse call/deadline details out of eight different languages and layouts, so "changed" just means the page text is different since the last check (sometimes a rotating banner, not real news). Follow the link to see for yourself.</p>' +
+            '<button class="ghost" id="ad-rescan">Scan sites now</button>' +
+            '<div id="src-list" style="margin-top:12px"></div>';
+          const srcList = body.querySelector('#src-list');
+          const drawSources = rows => {
+            srcList.innerHTML = rows.length ? rows.map(s =>
+              '<div class="doc-row"><span style="flex:1;min-width:0">' +
+              '<span class="doc-name">' + esc(s.country) + (s.changed ? ' <span class="badge due">Changed</span>' : '') +
+              (!s.ok ? ' <span class="badge due" style="background:var(--none-soft);color:var(--none)">Error</span>' : '') + '</span><br/>' +
+              '<span class="doc-meta">' + esc(s.agency) + ' - ' + esc(s.ts) + '</span><br/>' +
+              (s.ok
+                ? '<span class="doc-meta">' + esc((s.snippet || '').slice(0, 160)) + '…</span>'
+                : '<span class="doc-meta" style="color:var(--none)">' + esc(s.error || 'unreachable') + '</span>') +
+              '</span>' +
+              '<a class="icon-btn" href="' + esc(s.url) + '" target="_blank" rel="noopener" aria-label="Open the official site">' + icon('external-link') + '</a>' +
+              '</div>'
+            ).join('') : '<p class="meta">No checks yet - tap "Scan sites now".</p>';
+          };
+          drawSources(list);
+          body.querySelector('#ad-rescan').onclick = async () => {
+            body.querySelector('#ad-rescan').disabled = true;
+            try {
+              const res = await Store.adminApi('/api/admin/erasmus-sources/scan', { method: 'POST', body: 'null' }, getTok());
+              drawSources(res.sources || []);
+              toast('Sites checked');
+            } catch (e) { body.insertAdjacentHTML('afterbegin', '<p class="meta log-error">' + esc((e.code || 'ERR') + ': ' + e.message) + '</p>'); }
+            body.querySelector('#ad-rescan').disabled = false;
+          };
         } else if (tab === 'logs') {
           const out = await Store.adminApi('/api/admin/logs?limit=' + encodeURIComponent(logLimit) + (logLevel ? '&level=' + encodeURIComponent(logLevel) : ''), {}, tok);
           const logs = out.logs || [];

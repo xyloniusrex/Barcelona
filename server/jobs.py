@@ -13,6 +13,8 @@ import os
 from datetime import datetime, timedelta
 
 from server.db import db, j
+from server import cleanup as cleanupmod
+from server import finder as findermod
 from server import logs as logsmod
 
 
@@ -78,6 +80,26 @@ def scan_opportunities():
         return {"id": cur.lastrowid, "run_at": run_at, "count": len(found), "opportunities": found}
 
 
+async def _run_blocking(fn):
+    """Runs a blocking function (network I/O, mostly) off the event loop, so
+    it never stalls unrelated HTTP requests while it waits on a slow site."""
+    import asyncio
+    return await asyncio.get_event_loop().run_in_executor(None, fn)
+
+
+async def run_extra_jobs():
+    """Erasmus site watcher + expired-data cleanup. Each runs independently -
+    one failing (a site down, say) never skips the other."""
+    try:
+        await _run_blocking(findermod.scan_sources)
+    except Exception as e:
+        logsmod.log_event("ERROR", "erasmus_finder", f"source scan failed: {type(e).__name__}: {e}")
+    try:
+        await _run_blocking(cleanupmod.cleanup_expired)
+    except Exception as e:
+        logsmod.log_event("ERROR", "cleanup", f"cleanup failed: {type(e).__name__}: {e}")
+
+
 async def scheduler():
     """Sleep until the next configured hour, scan, repeat."""
     import asyncio
@@ -89,6 +111,7 @@ async def scheduler():
             scan_opportunities()
         except Exception as e:
             logsmod.log_event("ERROR", "scan", f"scheduled scan failed: {type(e).__name__}: {e}")
+        await run_extra_jobs()
 
 
 def last_scan():
