@@ -7,6 +7,7 @@ const Store = (() => {
   const state = {
     userId: null,
     sessionEmail: null,
+    sessionToken: null,
     seenLanding: false,
     theme: 'dark',
     language: 'en',
@@ -51,8 +52,8 @@ const Store = (() => {
   }
 
   function saveLocal() {
-    const { userId, sessionEmail, seenLanding, theme, language, mode, user, mobility, tasks, availability, calView } = state;
-    localStorage.setItem(LS_KEY, JSON.stringify({ userId, sessionEmail, seenLanding, theme, language, mode, user, mobility, tasks, availability, calView }));
+    const { userId, sessionEmail, sessionToken, seenLanding, theme, language, mode, user, mobility, tasks, availability, calView } = state;
+    localStorage.setItem(LS_KEY, JSON.stringify({ userId, sessionEmail, sessionToken, seenLanding, theme, language, mode, user, mobility, tasks, availability, calView }));
     if (state.universities.length) {
       localStorage.setItem(LS_KEY + '-seed', JSON.stringify({ universities: state.universities, homeCourses: state.homeCourses }));
     }
@@ -65,16 +66,30 @@ const Store = (() => {
     document.documentElement.dataset.theme = state.theme === 'light' ? 'light' : 'dark';
   }
 
+  function authHeaders() {
+    const h = { 'Content-Type': 'application/json' };
+    if (state.sessionToken) h['Authorization'] = 'Bearer ' + state.sessionToken;
+    return h;
+  }
+
   async function api(path, opts) {
-    const res = await fetch(path, Object.assign({ headers: { 'Content-Type': 'application/json' } }, opts));
-    if (!res.ok) throw new Error(path + ' -> ' + res.status);
+    const res = await fetch(path, Object.assign({ headers: authHeaders() }, opts));
+    if (!res.ok) {
+      let detail = {};
+      try { detail = await res.json(); } catch (e) { /* non-JSON error body */ }
+      const err = new Error((detail.message || res.statusText) + ' [' + (detail.error || res.status) + ']');
+      err.code = detail.error || ('ERR_HTTP_' + res.status);
+      err.message = detail.message || String(err.message);
+      err.status = res.status;
+      throw err;
+    }
     return res.status === 204 ? null : res.json();
   }
 
   function registerDeviceUser() {
     fetch('/api/users', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeaders(),
       body: JSON.stringify({ id: state.userId, email: state.sessionEmail || null }),
     }).catch(() => {});
   }
@@ -151,7 +166,7 @@ const Store = (() => {
     saveLocal();
     fetch('/api/users/' + state.userId, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeaders(),
       body: JSON.stringify({ theme: state.theme }),
     }).catch(() => {});
   }
@@ -175,7 +190,7 @@ const Store = (() => {
     saveLocal();
     fetch('/api/users/' + state.userId, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeaders(),
       body: JSON.stringify({ availability: JSON.stringify(state.availability) }),
     }).catch(() => {});
     return state.availability.indexOf(dateStr) !== -1;
@@ -189,36 +204,29 @@ const Store = (() => {
     try {
       await fetch('/api/users/' + state.userId, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders(),
         body: JSON.stringify(body),
       });
     } catch (e) { /* local-first; sync retried next boot */ }
   }
 
-  async function login(email) {
-    const me = await api('/api/users/by-email/' + encodeURIComponent(email));
-    state.userId = me.id;
-    state.sessionEmail = me.email || email;
-    await refreshUserState();
-    saveLocal();
-    return me;
+  async function requestAuthCode(email) {
+    const out = await api('/api/auth/request-code', { method: 'POST', body: JSON.stringify({ email }) });
+    return out;
   }
 
-  async function signup(email) {
-    if (!state.userId) state.userId = newId();
-    await api('/api/users', {
-      method: 'POST',
-      body: JSON.stringify({ id: state.userId, email }),
-    });
-    state.sessionEmail = email;
-    try {
-      await refreshUserState();
-    } catch (e) { /* keep local state */ }
+  async function verifyAuthCode(email, code) {
+    const out = await api('/api/auth/verify', { method: 'POST', body: JSON.stringify({ email, code }) });
+    state.sessionToken = out.token;
+    state.userId = out.user.id;
+    state.sessionEmail = out.user.email || email;
+    try { await refreshUserState(); } catch (e) { /* keep local state */ }
     saveLocal();
-    return state;
+    return out.user;
   }
 
   async function logout() {
+    state.sessionToken = null;
     state.sessionEmail = null;
     state.user = null;
     state.mobility = null;
@@ -357,7 +365,7 @@ const Store = (() => {
   return {
     state, boot, saveProfile, saveLocal, uniById, score, sortedUnis,
     addToShortlist, removeFromShortlist, accept, toggleTask, addTask, scan, getScans, getUniversityDetail,
-    login, signup, logout, notify,
+    requestAuthCode, verifyAuthCode, logout, notify,
     safeUserDocs, addUserDoc, updateUserDoc, deleteUserDoc, saveDocBlob, getDocBlob, deleteDocBlob,
     loadStrings, t, setTheme, setLanguage,
     isAvailable, toggleAvailability,

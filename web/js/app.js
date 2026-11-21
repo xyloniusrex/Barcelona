@@ -239,34 +239,73 @@ const App = (() => {
   }
 
   function viewAuth(root) {
+    let step = 1;
+    let email = '';
+    let devCode = '';
     const wrap = h('<div class="screen panel" style="padding:88px 12px 0">' +
       '<div class="card">' +
       '<p class="section-label">' + esc(T('Sign in or create an account')) + '</p>' +
-      '<div class="hint">one email, no passwords. an existing email logs in; a new one creates an account.</div>' +
+      '<div class="hint">UPT MAIL ONLY (upt.ro / e-upt.ro). no passwords - a 6-digit verification code is sent to the address.</div>' +
+      '<div id="a-step1">' +
       '<div class="form-field"><label>' + esc(T('Email')) + '</label>' +
       '<input id="a-email" type="email" placeholder="you@upt.ro" autocomplete="email" /></div>' +
-      '<button class="primary" id="a-go">[ ' + esc(T('Continue')) + ' ]</button>' +
+      '<button class="primary" id="a-go1">[ ' + esc(T('Send code')) + ' ]</button>' +
+      '</div>' +
+      '<div id="a-step2" hidden>' +
+      '<div class="hint" id="a-sent"></div>' +
+      '<div class="hint" id="a-devcode"></div>' +
+      '<div class="form-field"><label>' + esc(T('Verification code')) + '</label>' +
+      '<input id="a-code" class="num" inputmode="numeric" maxlength="6" placeholder="....../" /></div>' +
+      '<button class="primary" id="a-go2">[ ' + esc(T('Verify')) + ' ]</button>' +
+      '<button class="link" id="a-resend">' + esc(T('Send again')) + '</button>' +
+      '</div>' +
+      '<div id="auth-err"></div>' +
       '<button class="link" id="a-back">' + esc(T('Back')) + '</button>' +
       '</div></div>');
+    const errEl = wrap.querySelector('#auth-err');
+    const step1 = wrap.querySelector('#a-step1');
+    const step2 = wrap.querySelector('#a-step2');
+    const showErr = e => {
+      errEl.textContent = (e && e.code ? String(e.code) + ': ' : '') + (e && e.message ? e.message : 'unknown failure - is the server online?');
+      errEl.className = 'hint';
+      errEl.style.color = 'var(--none)';
+    };
+    const showStep = s => { step = s; step1.hidden = s !== 1; step2.hidden = s !== 2; };
     wrap.querySelector('#a-back').onclick = () => goBack();
-    wrap.querySelector('#a-go').onclick = async () => {
-      const inp = wrap.querySelector('#a-email');
-      const email = inp.value.trim().toLowerCase();
-      if (!email || email.indexOf('@') < 1) { toast('Enter a valid email'); return; }
+    wrap.querySelector('#a-resend').onclick = async () => {
       try {
-        await Store.login(email);
+        const out = (await Store.requestAuthCode(email));
+        devCode = out.dev_code || '';
+        wrap.querySelector('#a-devcode').textContent = devCode ? 'no MAIL SENDER CONFIGURED - DEV CODE: ' + devCode : ''; 
+        errEl.textContent = '';
+      } catch (e) { showErr(e); }
+    };
+    wrap.querySelector('#a-go1').onclick = async () => {
+      email = wrap.querySelector('#a-email').value.trim().toLowerCase();
+      if (!email || email.indexOf('@') < 1) { showErr({ code: 'ERR_INPUT', message: 'enter your email first' }); return; }
+      errEl.textContent = '';
+      try {
+        const out = (await Store.requestAuthCode(email));
+        devCode = out.dev_code || '';
+        wrap.querySelector('#a-sent').textContent = out.code_sent ? 'CODE SENT TO ' + email.toUpperCase() : '';
+        wrap.querySelector('#a-devcode').textContent = devCode ? 'no MAIL SENDER CONFIGURED - DEV CODE: ' + devCode : '';
+        showStep(2);
+        const codeInput = wrap.querySelector('#a-code');
+        codeInput.focus();
+      } catch (e) { showErr(e); }
+    };
+    wrap.querySelector('#a-go2').onclick = async () => {
+      const code = wrap.querySelector('#a-code').value.trim();
+      if (code.length < 4) { showErr({ code: 'ERR_INPUT', message: 'enter the 6-digit code' }); return; }
+      try {
+        await Store.verifyAuthCode(email, code);
+        errEl.textContent = '';
         toast('Welcome back');
         go(afterAuth(), { replace: true });
-      } catch (e) {
-        if (String(e.message).indexOf('404') !== -1) {
-          await Store.signup(email);
-          toast('Account created');
-          go('onboarding', { replace: true });
-        } else {
-          toast('Could not sign in. Is the server online?');
-        }
-      }
+      } catch (e) { showErr(e); }
     };
+    wrap.querySelector('#a-code').onkeydown = ev => { if (ev.key === 'Enter') wrap.querySelector('#a-go2').click(); };
+    wrap.querySelector('#a-email').onkeydown = ev => { if (ev.key === 'Enter') wrap.querySelector('#a-go1').click(); };
     root.appendChild(wrap);
   }
 

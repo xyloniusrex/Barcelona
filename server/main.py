@@ -5,17 +5,20 @@ API for user data (all of it stored in SQLite), and one-time MJPEG animation
 clips rendered with Pillow. Everything reusable is cached on the device by the
 service worker.
 """
+import secrets
 import uuid
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from contextlib import asynccontextmanager
 import os
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+from server import auth as authmod
 from server import seed as seedmod
 from server.anim import streams as anim_streams
 from server.db import db, init_db, j, parse
@@ -33,6 +36,19 @@ app = FastAPI(title="PoliGo", version="0.1.0", lifespan=lifespan)
 app.add_middleware(GZipMiddleware, minimum_size=512)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 app.include_router(anim_streams.router)
+
+
+@app.exception_handler(HTTPException)
+async def http_error(request, exc: HTTPException):
+    if isinstance(exc.detail, dict) and "error" in exc.detail:
+        return JSONResponse(status_code=exc.status_code, content=exc.detail)
+    code = f"ERR_HTTP_{exc.status_code}"
+    return JSONResponse(status_code=exc.status_code, content={"error": code, "message": str(exc.detail)})
+
+
+@app.exception_handler(Exception)
+async def unhandled_error(request, exc: Exception):
+    return JSONResponse(status_code=500, content={"error": "ERR_INTERNAL", "message": f"{type(exc).__name__}: {exc}"})
 
 
 def job(row):
@@ -105,7 +121,7 @@ def university_detail(university_id: str):
     with db() as conn:
         row = conn.execute("SELECT * FROM universities WHERE id = ?", (university_id,)).fetchone()
         if not row:
-            raise HTTPException(404, "unknown university")
+            raise HTTPException(404, {"error": "ERR_NO_UNIVERSITY", "message": "unknown university"})
         d = job(row)
         rows = conn.execute(
             "SELECT m.label, m.explanation, m.missing_topics, m.partner_course_id, "
@@ -146,7 +162,7 @@ def create_user(user: UserIn):
 def _get_user(conn, uid):
     row = conn.execute("SELECT * FROM users WHERE id = ?", (uid,)).fetchone()
     if not row:
-        raise HTTPException(404, "unknown user")
+        raise HTTPException(404, {"error": "ERR_NO_USER", "message": "unknown user"})
     return row
 
 
@@ -170,10 +186,11 @@ def get_user(uid: str):
 
 
 @app.patch("/api/users/{uid}")
-def update_user(uid: str, user: UserIn):
+def update_user(uid: str, user: UserIn, request: Request):
     fields = {k: v for k, v in user.model_dump().items() if v is not None and k != "id"}
     if fields:
         with db() as conn:
+            _require_session(request, conn, uid)
             _get_user(conn, uid)
             sets = ", ".join(f"{k} = ?" for k in fields)
             conn.execute(f"UPDATE users SET {sets} WHERE id = ?", (*fields.values(), uid))
@@ -198,12 +215,110 @@ def remove_shortlist(user_id: str, university_id: str):
     return {"ok": True}
 
 
+def _require_session(request: Request, conn, uid: str):
+    """Verify a Bearer session token for a user action.
+
+    Guest device rows (no email) stay open so the prototype keeps working.
+    Everything else needs a valid session token from /api/auth/verify.
+    Every failure returns an explicit error code.
+    """
+    row = conn.execute("SELECT email FROM users WHERE id = ?", (uid,)).fetchone()
+    if row is None:
+        raise HTTPException(404, {"error": "ERR_NO_USER", "message": "unknown user"})
+    if not row["email"]:
+        return
+    header = request.headers.get("authorization", "")
+    if not header.lower().startswith("bearer "):
+        raise HTTPException(401, {"error": "ERR_NO_TOKEN", "message": "sign in first - no session token sent"})
+    token = header[7:].strip()
+    ok = conn.execute("SELECT 1 FROM sessions WHERE token = ? AND user_id = ?", (token, uid)).fetchone()
+    if not ok:
+        raise HTTPException(403, {"error": "ERR_BAD_TOKEN", "message": "session token is not valid for this user - sign in again"})
+
+
+class AuthCodeIn(BaseModel):
+    email: str
+
+
+class VerifyIn(BaseModel):
+    email: str
+    code: str
+
+
+@app.post("/api/auth/request-code")
+def request_code(payload: AuthCodeIn):
+    email = payload.email.strip().lower()
+    if not authmod.upt_email_ok(email):
+        raise HTTPException(403, {"error": "ERR_NOT_UPT_MAIL", "message": "only @upt.ro student addresses can sign up"})
+    with db() as conn:
+        prev = conn.execute("SELECT created_at FROM auth_codes WHERE email = ?", (email,)).fetchone()
+        if prev:
+            elapsed = datetime.utcnow() - datetime.strptime(prev["created_at"], "%Y-%m-%d %H:%M:%S")
+            if elapsed < timedelta(seconds=60):
+                raise HTTPException(429, {"error": "ERR_RATE_LIMITED", "message": "wait a minute before asking for another code"})
+        code = authmod.new_code()
+        expires_at = (datetime.utcnow() + timedelta(minutes=authmod.CODE_TTL_MINUTES)).strftime("%Y-%m-%d %H:%M:%S")
+        conn.execute(
+            "INSERT OR REPLACE INTO auth_codes (email, code, expires_at, attempts, created_at) VALUES (?,?,?,0,?)",
+            (email, code, expires_at, datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")),
+        )
+    sent, detail = True, ""
+    try:
+        sent, detail = authmod.send_code(email, code)
+    except authmod.AuthError as e:
+        raise HTTPException(e.status, {"error": e.code, "message": e.message})
+    except Exception as e:
+        raise HTTPException(502, {"error": "ERR_SMTP_SEND", "message": f"could not send the code: {e}"})
+    if sent:
+        return {"ok": True, "code_sent": True, "message": "verification code sent to your UPT mail"}
+    return {"ok": True, "code_sent": False, "dev_code": code,
+            "message": "no mail sender is configured - the code is shown here instead"}
+
+
+@app.post("/api/auth/verify")
+def verify(payload: VerifyIn):
+    email = payload.email.strip().lower()
+    code = payload.code.strip()
+    with db() as conn:
+        row = conn.execute("SELECT * FROM auth_codes WHERE email = ?", (email,)).fetchone()
+        if not row:
+            raise HTTPException(404, {"error": "ERR_NO_CODE", "message": "request a code first"})
+        try:
+            expires_at = datetime.strptime(row["expires_at"], "%Y-%m-%d %H:%M:%S")
+        except ValueError:
+            conn.execute("DELETE FROM auth_codes WHERE email = ?", (email,))
+            raise HTTPException(403, {"error": "ERR_EXPIRED", "message": "code expired - request a new one"})
+        if datetime.utcnow() > expires_at:
+            conn.execute("DELETE FROM auth_codes WHERE email = ?", (email,))
+            raise HTTPException(403, {"error": "ERR_EXPIRED", "message": "code expired - request a new one"})
+        if row["attempts"] >= authmod.MAX_ATTEMPTS:
+            conn.execute("DELETE FROM auth_codes WHERE email = ?", (email,))
+            raise HTTPException(403, {"error": "ERR_TOO_MANY_TRIES", "message": "too many wrong codes - request a new one"})
+        if not secrets.compare_digest(row["code"], code):
+            left = authmod.MAX_ATTEMPTS - (row["attempts"] + 1)
+            if left <= 0:
+                conn.execute("DELETE FROM auth_codes WHERE email = ?", (email,))
+                raise HTTPException(403, {"error": "ERR_TOO_MANY_TRIES", "message": "too many wrong codes - request a new one"})
+            conn.execute("UPDATE auth_codes SET attempts = attempts + 1 WHERE email = ?", (email,))
+            raise HTTPException(403, {"error": "ERR_WRONG_CODE", "message": f"wrong code - {left} tries left"})
+        conn.execute("DELETE FROM auth_codes WHERE email = ?", (email,))
+        existing = conn.execute("SELECT * FROM users WHERE email = ?", (email,)).fetchone()
+        if not existing:
+            conn.execute("INSERT OR IGNORE INTO users (id, email) VALUES (?,?)", (str(uuid.uuid4()), email))
+            existing = conn.execute("SELECT * FROM users WHERE email = ?", (email,)).fetchone()
+        token = secrets.token_urlsafe(32)
+        conn.execute("INSERT INTO sessions (token, user_id) VALUES (?,?)", (token, existing["id"]))
+        user = job(existing)
+    return {"ok": True, "token": token, "user": user}
+
+
 class AcceptedIn(BaseModel):
     user_id: str
     university_id: str
     start_date: str
     arrival_date: str | None = None
     end_date: str
+    token: str | None = None
 
 
 def _tasks_from_template(mobility_id, start, arrival, end):
@@ -216,10 +331,11 @@ def _tasks_from_template(mobility_id, start, arrival, end):
 
 
 @app.post("/api/accepted")
-def accepted(payload: AcceptedIn):
+def accepted(payload: AcceptedIn, request: Request):
     arrival = payload.arrival_date or (date.fromisoformat(payload.start_date) - timedelta(days=3)).isoformat()
     mid = str(uuid.uuid4())
     with db() as conn:
+        _require_session(request, conn, payload.user_id)
         _get_user(conn, payload.user_id)
         conn.execute("UPDATE mobilities SET status = 'archived' WHERE user_id = ? AND status = 'active'", (payload.user_id,))
         conn.execute(
@@ -241,7 +357,7 @@ def get_mobility(mobility_id: str):
     with db() as conn:
         mob = conn.execute("SELECT * FROM mobilities WHERE id = ?", (mobility_id,)).fetchone()
         if not mob:
-            raise HTTPException(404, "unknown mobility")
+            raise HTTPException(404, {"error": "ERR_NO_MOBILITY", "message": "unknown mobility"})
         tasks = [job(r) for r in conn.execute("SELECT * FROM tasks WHERE mobility_id = ? ORDER BY due_date", (mobility_id,))]
         return {"mobility": job(mob), "tasks": tasks}
 
@@ -270,7 +386,7 @@ def patch_task(task_id: int, done: bool):
         conn.execute("UPDATE tasks SET done = ? WHERE id = ?", (1 if done else 0, task_id))
         row = conn.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
     if not row:
-        raise HTTPException(404, "unknown task")
+        raise HTTPException(404, {"error": "ERR_NO_TASK", "message": "unknown task"})
     return job(row)
 
 
@@ -360,7 +476,7 @@ def update_user_doc(doc_id: int, user_id: str, doc: UserDocIn):
     with db() as conn:
         row = conn.execute("SELECT * FROM user_docs WHERE id = ? AND user_id = ?", (doc_id, user_id)).fetchone()
         if not row:
-            raise HTTPException(404, "no such document")
+            raise HTTPException(404, {"error": "ERR_NO_DOC", "message": "no such document"})
         if fields:
             sets = ", ".join(f"{k} = ?" for k in fields)
             conn.execute(f"UPDATE user_docs SET {sets} WHERE id = ?", (*fields.values(), doc_id))
@@ -373,17 +489,6 @@ def delete_user_doc(doc_id: int, user_id: str):
     with db() as conn:
         conn.execute("DELETE FROM user_docs WHERE id = ? AND user_id = ?", (doc_id, user_id))
     return {"ok": True}
-
-
-@app.get("/api/users/by-email/{email}")
-def get_user_by_email(email: str):
-    with db() as conn:
-        row = conn.execute(
-            "SELECT * FROM users WHERE email = ? ORDER BY created_at LIMIT 1", (email,)
-        ).fetchone()
-    if not row:
-        raise HTTPException(404, "no account for this email")
-    return job(row)
 
 
 @app.get("/api/i18n/{lang}")

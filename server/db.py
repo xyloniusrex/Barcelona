@@ -121,6 +121,18 @@ CREATE TABLE IF NOT EXISTS translations (
     text TEXT NOT NULL,
     PRIMARY KEY (lang, key)
 );
+CREATE TABLE IF NOT EXISTS auth_codes (
+    email TEXT PRIMARY KEY,
+    code TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    attempts INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS sessions (
+    token TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id),
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 CREATE INDEX IF NOT EXISTS idx_matches_uni ON matches(university_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_mob ON tasks(mobility_id);
 """
@@ -166,6 +178,12 @@ MIGRATIONS = [
     "ALTER TABLE user_docs ADD COLUMN issued_on TEXT",
     "ALTER TABLE user_docs ADD COLUMN expires_on TEXT",
     "ALTER TABLE user_docs ADD COLUMN notes TEXT",
+    "CREATE TABLE IF NOT EXISTS auth_codes ("
+    " email TEXT PRIMARY KEY, code TEXT NOT NULL, expires_at TEXT NOT NULL,"
+    " attempts INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL DEFAULT (datetime('now')))",
+    "CREATE TABLE IF NOT EXISTS sessions ("
+    " token TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id),"
+    " created_at TEXT NOT NULL DEFAULT (datetime('now')))",
 ]
 
 
