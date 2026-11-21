@@ -19,16 +19,16 @@ const Term = (() => {
 
   function completionsFor(line) {
     line = line.toLowerCase();
+    if (line === 'go' || line.startsWith('go ')) {
+      const arg = line.slice(line.length > 2 ? 3 : 2);
+      return SCREENS.filter(s => arg === '' || s.startsWith(arg)).map(s => 'go ' + s);
+    }
     const cmds = [
-      'help', 'go ', 'login', 'admin', 'logout', 'refresh', 'clear', 'close',
+      'help', '--help', 'go ', 'login', 'admin', 'logout', 'refresh', 'clear', 'close',
       'settings:theme:dark', 'settings:theme:light',
       'settings:language:en', 'settings:language:ro',
       'settings:mode:explore', 'settings:mode:journey',
     ];
-    if (line.startsWith('go ')) {
-      const arg = line.slice(3);
-      return SCREENS.filter(s => arg === '' || s.startsWith(arg)).map(s => 'go ' + s);
-    }
     if (line.startsWith('settings:')) {
       return COMPLETE_settings(line).map(s => 'settings:' + s);
     }
@@ -98,7 +98,7 @@ const Term = (() => {
         hide();
       }
     });
-    print('poligo terminal - type help - tab completes like fish');
+    print('poligo terminal - type --help for the full tutorial - tab completes like fish');
   }
 
   function atEnd() {
@@ -189,20 +189,46 @@ const Term = (() => {
     }
   }
 
+  const TUTORIAL = [
+    'poligo terminal - what and how',
+    '',
+    'summoning this box:      ` (backquote) or ~ - any layout - also ctrl+`, or the >_ button in the top bar',
+    'closing:                 ` again, or escape',
+    '',
+    'completion (fish style): while you type, dim ghost text shows the suggestion behind the cursor.',
+    '  tab                    accept the suggestion, or complete to the shared prefix',
+    '  tab (many matches)     lists every matching command',
+    '  right arrow            accept, same as tab',
+    '  enter                  runs what is visible (suggestion included)',
+    '  up / down in input     walk through your command history',
+    '',
+    'navigation (when this input is NOT focused):',
+    '  up / down / left / right arrows   move a highlight through every control on screen',
+    '  enter                             activate the highlighted control',
+    '  escape                            back one screen',
+    '',
+    'commands:',
+    '  -- help                 show this tutorial',
+    '  go <screen>             jump anywhere. screens:',
+    '                            map  universities  shortlist  subjects  profile',
+    '                            today  calendar  timeline  docs',
+    '                            admin  (admin panel)',
+    '  settings:<key>:<value>  change app settings instantly:',
+    '                            theme:    dark | light',
+    '                            language: en | ro   (generated once, cached)',
+    '                            mode:     explore | journey',
+    '                            example:  settings:theme:light',
+    '  refresh                 re-pull all data from the server and re-render',
+    '  login                   open the upt mail sign-in screen',
+    '  admin                   open the admin panel (token prompt inside)',
+    '  logout                  end the session on this device',
+    '  clear / close           wipe the output / hide this terminal',
+    '',
+    'try: type se and watch the ghost, then press tab until settings:language:ro is complete, then enter.',
+  ];
+
   const COMMANDS = {
-    help: () => [
-      'go <screen>       ' + SCREENS.join(' / '),
-      'settings:theme:dark|light',
-      'settings:language:en|ro',
-      'settings:mode:explore|journey',
-      'login             open the upt mail sign-in screen',
-      'admin             open the admin screen (token entry inside)',
-      'logout            end the session on this device',
-      'refresh           reload all data from the server and re-render',
-      'clear, close      clear output / hide this terminal',
-      'typing: tab or right arrow accepts the ghost suggestion; tab lists all matches',
-      'outside the input: up/down/left/right arrows move focus between controls, activate with enter; escape goes back',
-    ],
+    help: () => TUTORIAL,
     go: (arg) => {
       const s = (arg || '').trim().toLowerCase();
       if (SCREENS.indexOf(s) === -1) return ['unknown screen: ' + s + ' - try: ' + SCREENS.join(' / ')];
@@ -237,7 +263,6 @@ const Term = (() => {
     clear: () => { if (out) out.innerHTML = ''; return []; },
     close: () => { hide(); return []; },
   };
-
   async function exec(line) {
     print('> ' + line, 'term-echo');
     try {
@@ -248,7 +273,8 @@ const Term = (() => {
         return;
       }
       const [cmd, ...rest] = line.split(/\s+/);
-      const fn = COMMANDS[cmd.toLowerCase()];
+      const c = cmd.toLowerCase();
+      const fn = COMMANDS[c === '--help' || c === '-h' || c === '?' ? 'help' : c];
       if (!fn) { print('unknown command: ' + cmd + ' - try help', 'term-err'); return; }
       const result = await fn(rest.join(' '));
       for (const l of result || []) print(l);
