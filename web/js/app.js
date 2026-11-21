@@ -540,9 +540,9 @@ const App = (() => {
       '<button class="link" id="skip-btn">' + esc(T('Explore without an account')) + '</button>' +
       '</div>' +
       '<div class="features">' +
-      '<div class="feat feat-1"><span class="feat-no">01</span><span><span class="f-title">' + esc(T('Find your matches')) + '</span><span class="f-sub">' + esc(T('Partner universities ranked by how much of your 30 ECTS they cover.')) + '</span></span></div>' +
-      '<div class="feat feat-2"><span class="feat-no">02</span><span><span class="f-title">' + esc(T('Stay on schedule')) + '</span><span class="f-sub">' + esc(T('A calendar and timeline built around your mobility dates and project deadlines.')) + '</span></span></div>' +
-      '<div class="feat feat-3"><span class="feat-no">03</span><span><span class="f-title">' + esc(T('Read any document')) + '</span><span class="f-sub">' + esc(T('Scan a rental contract or registration form and get plain answers.')) + '</span></span></div>' +
+      '<div class="feat feat-1"><span><span class="f-title">' + esc(T('Find your matches')) + '</span><span class="f-sub">' + esc(T('Partner universities ranked by how much of your 30 ECTS they cover.')) + '</span></span></div>' +
+      '<div class="feat feat-2"><span><span class="f-title">' + esc(T('Stay on schedule')) + '</span><span class="f-sub">' + esc(T('A calendar and timeline built around your mobility dates and project deadlines.')) + '</span></span></div>' +
+      '<div class="feat feat-3"><span><span class="f-title">' + esc(T('Read any document')) + '</span><span class="f-sub">' + esc(T('Scan a rental contract or registration form and get plain answers.')) + '</span></span></div>' +
       '</div>' +
       '<div class="updates">' +
       '<span class="f-title">' + esc(T('Get notified at launch')) + '</span>' +
@@ -1250,12 +1250,12 @@ const App = (() => {
     return f >= 0.6 ? 'good' : f >= 0.3 ? 'partial' : 'weak';
   }
 
-  // Four dropdowns instead of a wall of chips - same filters, far less to scan.
+  // Two dropdowns: language and country.
   function buildFilters(el, onChange) {
     const langs = [...new Set(Store.state.universities.flatMap(u => u.languages || []))].sort();
     const countries = [...new Set(Store.state.universities.map(u => u.country))].sort();
-    const regions = [...new Set(countries.map(regionOf))].sort();
     const f = Store.state.filters;
+    f.region = null; f.quality = null;   // no longer offered - drop any value saved from before
     const selectOf = (kind, allLabel, options) =>
       '<div class="select-wrap"><select data-filter="' + kind + '">' +
       '<option value="">' + esc(allLabel) + '</option>' +
@@ -1263,9 +1263,7 @@ const App = (() => {
       '</select>' + icon('chevron-down', 'sel-ico') + '</div>';
     el.innerHTML = '<div class="filter-grid">' +
       selectOf('lang', T('All languages'), langs.map(l => [l, T(l)])) +
-      selectOf('region', T('All regions'), regions.map(r => [r, T(r)])) +
       selectOf('country', T('All countries'), countries.map(c => [c, T(c)])) +
-      selectOf('quality', T('Any match'), [['good', T('Good match')], ['partial', T('Partial match')], ['weak', T('No match')]]) +
       '</div>';
     el.querySelectorAll('select[data-filter]').forEach(sel => {
       sel.onchange = () => { f[sel.dataset.filter] = sel.value || null; onChange(); };

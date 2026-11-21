@@ -476,15 +476,6 @@ body.no-scroll { overflow: hidden; }
 .slogan { font-size: 17px; line-height: 26px; color: var(--text-2); }
 .features { display: flex; flex-direction: column; gap: 10px; margin-bottom: 28px; }
 .feat { display: flex; align-items: flex-start; gap: 14px; padding: 16px; background: color-mix(in srgb, var(--surface) 86%, transparent); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--card-shadow); }
-.feat-no {
-  flex: none;
-  display: flex; align-items: center; justify-content: center;
-  width: 36px; height: 36px;
-  border: 1.5px solid var(--accent-live);
-  border-radius: 50%;
-  color: var(--accent-live);
-  font: 700 14px/1 var(--display);
-}
 .f-title { display: block; font: 600 16px/22px var(--font); color: var(--text); }
 .f-sub { display: block; margin-top: 2px; font-size: 14px; line-height: 20px; color: var(--text-2); }
 .landing > .ghost { margin-top: 10px; }
