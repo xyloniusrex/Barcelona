@@ -19,6 +19,7 @@ const Store = (() => {
     homeCourses: [],
     mobility: null,
     pendings: [],        // mobilities sent for approval, waiting for an admin - can be more than one
+    mobilities: [],      // every application ever made (any status), newest first
     tasks: [],
     screen: 'welcome',
     activeUniId: null,
@@ -108,6 +109,7 @@ const Store = (() => {
     state.mode = me.mode || 'explore';
     state.mobility = me.mobility || null;
     state.pendings = me.pendings || [];
+    state.mobilities = me.mobilities || [];
     state.tasks = [];
     if (me.mobility) {
       try { state.tasks = (await api('/api/mobilities/' + me.mobility.id)).tasks; } catch (e) {}
@@ -249,6 +251,7 @@ const Store = (() => {
     state.user = null;
     state.mobility = null;
     state.pendings = [];
+    state.mobilities = [];
     state.tasks = [];
     state.availability = [];
     state.mode = 'explore';
@@ -285,6 +288,7 @@ const Store = (() => {
   async function accept(payload) {
     const out = await api('/api/accepted', { method: 'POST', body: JSON.stringify(Object.assign({ user_id: state.userId }, payload)) });
     state.pendings = [...state.pendings.filter(p => p.id !== out.mobility.id), out.mobility];
+    state.mobilities = [out.mobility, ...state.mobilities.filter(m => m.id !== out.mobility.id)];
     saveLocal();
     return out;
   }
@@ -293,6 +297,7 @@ const Store = (() => {
   async function withdrawApplication(mobilityId) {
     await api('/api/mobilities/' + mobilityId + '/withdraw', { method: 'POST', body: JSON.stringify({ user_id: state.userId }) });
     state.pendings = state.pendings.filter(p => p.id !== mobilityId);
+    state.mobilities = state.mobilities.map(m => m.id === mobilityId ? Object.assign({}, m, { status: 'withdrawn' }) : m);
     saveLocal();
   }
 

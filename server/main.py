@@ -208,6 +208,14 @@ def get_user(uid: str):
                 "SELECT * FROM mobilities WHERE user_id = ? AND status = 'pending' ORDER BY created_at DESC", (uid,)
             )
         ]
+        # every application the student ever made, newest first - the Home
+        # screen lists these one after another instead of showing only the
+        # single active one.
+        d["mobilities"] = [
+            job(r) for r in conn.execute(
+                "SELECT * FROM mobilities WHERE user_id = ? ORDER BY created_at DESC", (uid,)
+            )
+        ]
         return d
 
 

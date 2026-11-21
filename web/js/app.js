@@ -769,53 +769,65 @@ const App = (() => {
 
   /* ----------------------------------------------------------------- home */
 
-  // One card per pending application - a student can apply to more than one
-  // university while waiting to hear back, so this is a list, not a single slot.
-  function pendingCardHtml(p) {
-    const u = Store.uniById(p.university_id);
+  // One card per application, newest first, stacked one after another on
+  // the same page - a student can have several at once (pending, one active,
+  // and whatever history piled up), not just a single current slot.
+  function mobilityCardHtml(m) {
+    const u = Store.uniById(m.university_id);
     if (!u) return '';
-    return '<div class="card home-info">' +
-      '<div class="route">' +
+    const route = '<div class="route">' +
       '<span class="route-city">' + flagImg('RO') + '<b>Timișoara</b></span>' +
       '<span class="route-arrow">' + icon('arrow-right') + '</span>' +
       '<span class="route-city">' + flagImg(u.country_code) + '<b>' + esc(u.city) + '</b></span>' +
       '</div>' +
       '<p class="hint route-sub">' + esc(u.name) + ' - ' + esc(T(u.country)) +
-      '<br/>' + esc(fmtDate(p.start_date)) + ' - ' + esc(fmtDate(p.end_date)) + '</p>' +
-      '<p class="pending-pill"><span class="pill partial">' + icon('clock', 'sm-ico') + ' ' + esc(T('Waiting for approval')) + '</span></p>' +
-      '<div class="home-actions"><button class="ghost" data-withdraw="' + esc(p.id) + '">' + esc(T('Withdraw')) + '</button></div>' +
-      '</div>';
+      '<br/>' + esc(fmtDate(m.start_date)) + ' - ' + esc(fmtDate(m.end_date)) + '</p>';
+    if (m.status === 'active') {
+      return '<div class="card home-info">' + route + countdownHtml() +
+        '<button class="link" id="h-browse">' + esc(T('Browse other universities')) + '</button>' +
+        '</div>';
+    }
+    if (m.status === 'pending') {
+      return '<div class="card home-info">' + route +
+        '<p class="pending-pill"><span class="pill partial">' + icon('clock', 'sm-ico') + ' ' + esc(T('Waiting for approval')) + '</span></p>' +
+        '<div class="home-actions"><button class="ghost" data-withdraw="' + esc(m.id) + '">' + esc(T('Withdraw')) + '</button></div>' +
+        '</div>';
+    }
+    const pill = { archived: '<span class="pill good">' + icon('check', 'sm-ico') + ' ' + esc(T('Completed')) + '</span>',
+      rejected: '<span class="pill none">' + icon('x', 'sm-ico') + ' ' + esc(T('Not approved')) + '</span>',
+      withdrawn: '<span class="pill">' + esc(T('Withdrawn')) + '</span>' }[m.status] || '';
+    return '<div class="card home-info">' + route + '<p class="pending-pill">' + pill + '</p></div>';
   }
 
   function viewHome(root) {
     const st = Store.state;
-    const mob = st.mode === 'journey' ? st.mobility : null;
-    const pends = mob ? [] : (st.pendings || []).filter(p => Store.uniById(p.university_id));
-    const uni = mob ? Store.uniById(mob.university_id)
-      : pends[0] ? Store.uniById(pends[0].university_id)
+    const mobs = (st.mobilities || []).filter(m => Store.uniById(m.university_id));
+    const activeMob = mobs.find(m => m.status === 'active');
+    const pendingMobs = mobs.filter(m => m.status === 'pending');
+    const focusUni = activeMob ? Store.uniById(activeMob.university_id)
+      : pendingMobs[0] ? Store.uniById(pendingMobs[0].university_id)
       : (st.activeUniId ? Store.uniById(st.activeUniId) : null);
 
     let info;
-    if (pends.length) {
-      info = pends.map(pendingCardHtml).join('') +
+    if (mobs.length) {
+      info = mobs.map(mobilityCardHtml).join('') +
         '<div class="card home-info">' +
-        '<p class="hint">' + esc(T('The Erasmus office has to confirm an acceptance before that journey (steps, countdown, documents) opens. You can apply to more than one and choose once you hear back.')) + '</p>' +
-        '<div class="home-actions"><button class="primary" id="h-check">' + esc(T('Check again')) + '</button>' +
-        '<button class="ghost" id="h-change">' + esc(T('Apply to another')) + '</button></div>' +
+        (pendingMobs.length
+          ? '<p class="hint">' + esc(T('The Erasmus office has to confirm an acceptance before that journey (steps, countdown, documents) opens. You can apply to more than one and choose once you hear back.')) + '</p>' +
+            '<div class="home-actions"><button class="primary" id="h-check">' + esc(T('Check again')) + '</button>' +
+            '<button class="ghost" id="h-change">' + esc(T('Apply to another')) + '</button></div>'
+          : '<div class="home-actions"><button class="ghost" id="h-change">' + esc(T('Apply to another')) + '</button></div>') +
         '</div>';
-    } else if (uni) {
+    } else if (focusUni) {
       info = '<div class="card home-info">' +
         '<div class="route">' +
         '<span class="route-city">' + flagImg('RO') + '<b>Timișoara</b></span>' +
         '<span class="route-arrow">' + icon('arrow-right') + '</span>' +
-        '<span class="route-city">' + flagImg(uni.country_code) + '<b>' + esc(uni.city) + '</b></span>' +
+        '<span class="route-city">' + flagImg(focusUni.country_code) + '<b>' + esc(focusUni.city) + '</b></span>' +
         '</div>' +
-        '<p class="hint route-sub">' + esc(uni.name) + ' - ' + esc(T(uni.country)) +
-        (mob ? '<br/>' + esc(fmtDate(mob.start_date)) + ' - ' + esc(fmtDate(mob.end_date)) : '') + '</p>' +
-        (mob
-          ? countdownHtml() + '<button class="link" id="h-browse">' + esc(T('Browse other universities')) + '</button>'
-          : '<div class="home-actions"><button class="primary" id="h-open">' + esc(T('Open this university')) + '</button>' +
-            '<button class="ghost" id="h-change">' + esc(T('Choose another')) + '</button></div>') +
+        '<p class="hint route-sub">' + esc(focusUni.name) + ' - ' + esc(T(focusUni.country)) + '</p>' +
+        '<div class="home-actions"><button class="primary" id="h-open">' + esc(T('Open this university')) + '</button>' +
+        '<button class="ghost" id="h-change">' + esc(T('Choose another')) + '</button></div>' +
         '</div>';
     } else {
       info = '<div class="card home-info">' +
@@ -843,10 +855,10 @@ const App = (() => {
         catch (e) { toast(errText(e)); btn.disabled = false; }
       };
     });
-    if (mob) startCountdown(wrap);
-    if (pends.length) startTimer(() => checkApproval(true), 30000);   // approval shows up on its own
+    if (activeMob) startCountdown(wrap);
+    if (pendingMobs.length) startTimer(() => checkApproval(true), 30000);   // approval shows up on its own
 
-    Stage.homeGlobe(wrap.querySelector('#home-globe'), uni, id => { st.activeUniId = id; go('uni'); });
+    Stage.homeGlobe(wrap.querySelector('#home-globe'), focusUni, id => { st.activeUniId = id; go('uni'); });
     root.appendChild(wrap);
   }
 
