@@ -129,8 +129,10 @@ const App = (() => {
     $top.hidden = false;
     $top.innerHTML = '<button class="back-btn">' + icon('arrow-left', 'sm-ico') +
       '<span>' + esc(T('Back')) + '</span></button>' +
-      '<span class="prompt">poligo<span class="cursor">_</span></span>';
+      '<span class="prompt">poligo<span class="cursor">_</span></span>' +
+      '<button class="back-btn term-btn" aria-label="Terminal">&gt;_</button>';
     $top.querySelector('.back-btn').onclick = () => goBack();
+    $top.querySelector('.term-btn').onclick = () => Term.toggle();
   }
 
   function renderNav() {

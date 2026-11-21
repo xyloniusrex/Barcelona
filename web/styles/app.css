@@ -128,6 +128,7 @@ button:disabled { color: var(--text-3); border-color: var(--border); cursor: def
 }
 #topBar .prompt, .brand { color: var(--accent-live); }
 #topBar[hidden] { display: none; }
+#topBar .term-btn { margin-left: auto; color: var(--accent-live); padding: 4px 10px; }
 
 /* ---------- bottom nav ---------- */
 #bottomNav {
@@ -341,13 +342,30 @@ button:disabled { color: var(--text-3); border-color: var(--border); cursor: def
 .term-err { color: var(--none); }
 .term-in-row { display: flex; align-items: center; gap: 8px; padding: 8px 10px; }
 .term-prompt { color: var(--accent-live); }
-.term-in-row input {
+.term-line { position: relative; flex: 1; display: flex; }
+.term-line input {
   flex: 1;
-  background: none;
+  position: relative;
+  z-index: 2;
+  background: transparent;
   border: none;
   border-bottom: 1px solid var(--border);
   padding: 4px 0;
 }
+.term-ghost {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  white-space: pre;
+  pointer-events: none;
+  z-index: 1;
+  max-width: 100%;
+  overflow: hidden;
+  font: inherit;
+}
+.g-typed { color: transparent; }
+.g-rest { color: var(--text-3); }
 .term-hint { color: var(--text-3); padding: 0 10px 8px; font-size: 10px; }
 
 .log-info { color: var(--text-2); }
