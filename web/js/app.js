@@ -6,7 +6,8 @@
  *
  * Shape of the app:
  *   top bar   PoliGo logo (-> Home) . language . theme . Home . Profile
- *   Home      globe with Romania + your destination, live countdown, the menu
+ *   Home      globe with Romania + your destination, live countdown
+ *   menu      centred in the top bar on every screen after login (two rows on a phone)
  *   screens   universities (list / map / favorite in one screen) . my subjects (explore),
  *             today / plan (calendar + steps) / documents (journey)
  *   pending   "I got accepted" waits for an admin to approve it before the journey opens
@@ -23,29 +24,15 @@ const App = (() => {
       ['today', 'Today'],
       ['plan', 'Plan'],
       ['docs', 'Documents'],
+      ['scanJ', 'Scan'],
     ],
   };
   const NAV_ICONS = {
     map: 'landmark', shortlist: 'bookmark', subjects: 'check',
-    today: 'sun', plan: 'calendar-days', docs: 'file-text',
+    today: 'sun', plan: 'calendar-days', docs: 'file-text', scanJ: 'scan-line',
   };
-  // [screen, label, icon, one-line description] - the tiles on Home
-  const MENU = {
-    explore: [
-      ['map', 'Universities', 'landmark', 'Compare how many subjects match'],
-      ['shortlist', 'Favorite', 'bookmark', 'Your top 3, in order'],
-      ['subjects', 'My subjects', 'check', 'Choose what to match'],
-      ['profile', 'Profile', 'user', 'Account and settings'],
-    ],
-    journey: [
-      ['today', 'Today', 'sun', 'What is next for you'],
-      ['plan', 'Plan', 'calendar-days', 'Your steps and dates, in one place'],
-      ['docs', 'Documents', 'file-text', 'Erasmus papers and your ID, in one place'],
-      ['scanJ', 'Scan a document', 'scan-line', 'Understand any paper'],
-      ['profile', 'Profile', 'user', 'Account and settings'],
-    ],
-  };
-  const NAV_SCREENS = new Set([].concat(NAVS.explore, NAVS.journey).map(n => n[0]));
+  // the menu sits in the top bar on every screen after login, except these
+  const NO_NAV = new Set(['landing', 'auth', 'onboarding', 'admin']);
   const KNOWN = new Set(['landing', 'auth', 'onboarding', 'uni', 'subjects', 'scanJ', 'admin', 'home', 'profile', 'map',
     'universities', 'shortlist', 'today', 'plan', 'docs']);
   // old screen names (links, saved state, the terminal) -> where they live now
@@ -67,7 +54,6 @@ const App = (() => {
   const DURATIONS = ['One semester (5-6 months)', 'Two semesters (10-12 months)', 'Summer (1-2 months)', 'Short stay (a few weeks)'];
   const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
   const WDAYS = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
-  const LANGS = [['en', 'English'], ['ro', 'Română']];
   const STUDENT_DOMAIN = '@student.upt.ro';
   const KNOWN_LANGUAGES = ['English', 'Romanian', 'French', 'German', 'Spanish', 'Portuguese', 'Italian', 'Dutch', 'Finnish', 'Hungarian', 'Latvian', 'Polish'];
   // country -> macro-region: groups destinations in setup and feeds the map's region filter
@@ -95,7 +81,6 @@ const App = (() => {
   let tlOpen = null;                 // timeline: which stages are expanded
 
   const $app = document.getElementById('app');
-  const $nav = document.getElementById('bottomNav');
   const $top = document.getElementById('topBar');
 
   /* ------------------------------------------------------------------ helpers */
@@ -409,12 +394,16 @@ const App = (() => {
     const out = s === 'landing' || s === 'auth';
     const hasHome = !out && s !== 'onboarding';
     $top.hidden = false;
+    const withNav = !NO_NAV.has(s);
+    document.body.classList.toggle('with-nav', withNav);
     $top.innerHTML =
+      '<div class="top-left">' +
       (history.length > 0 && s !== 'landing'
         ? '<button class="back-btn" id="tb-back" aria-label="' + esc(T('Back')) + '">' + icon('arrow-left', 'sm-ico') + '<span>' + esc(T('Back')) + '</span></button>'
         : '') +
-      '<a class="top-brand" id="tb-brand" href="#' + (out ? 'landing' : 'home') + '" aria-label="PoliGo - ' + esc(T('Menu')) + '">' + lockup(28) + '</a>' +
-      '<span class="top-spacer"></span>' +
+      '<a class="top-brand" id="tb-brand" href="#' + (out ? 'landing' : 'home') + '" aria-label="PoliGo - ' + esc(T('Home')) + '">' + lockup(28) + '</a>' +
+      '</div>' +
+      (withNav ? '<nav class="top-nav" id="topNav" aria-label="' + esc(T('Menu')) + '"></nav>' : '') +
       '<div class="top-actions">' +
       '<button class="icon-btn top-btn top-lang" id="tb-lang" aria-label="' + esc(T('Language')) + '">' + (isRo() ? 'EN' : 'RO') + '</button>' +
       '<button class="icon-btn top-btn" id="tb-theme" aria-label="' + esc(T(isLight() ? 'Switch to dark theme' : 'Switch to light theme')) + '">' + icon(isLight() ? 'moon' : 'sun') + '</button>' +
@@ -444,8 +433,8 @@ const App = (() => {
 
   function renderNav() {
     const { mode, screen } = Store.state;
-    if (!NAV_SCREENS.has(screen)) { $nav.hidden = true; return; }
-    $nav.hidden = false;
+    const $nav = document.getElementById('topNav');
+    if (!$nav) return;
     $nav.innerHTML = '';
     const group = navGroupFor(screen, mode);
     const cd = group === 'journey' ? navCountdownText() : '';
@@ -456,7 +445,7 @@ const App = (() => {
     for (const [id, label] of NAVS[group]) {
       const badge = id === 'today' && cd ? '<span class="nav-cd" data-nav-cd>' + esc(cd) + '</span>' : '';
       const dot = id === 'plan' && hasOverdueTasks() ? '<span class="nav-dot"></span>' : '';
-      const b = h('<button class="' + (isActive(id) ? 'active' : '') + '"><span class="ico">' + icon(NAV_ICONS[id]) + badge + dot + '</span><span>' + esc(T(label)) + '</span></button>');
+      const b = h('<button class="' + (isActive(id) ? 'active' : '') + '"' + (isActive(id) ? ' aria-current="page"' : '') + '><span class="ico">' + icon(NAV_ICONS[id]) + badge + dot + '</span><span>' + esc(T(label)) + '</span></button>');
       b.onclick = () => {
         // "Universities" from Favorite goes back to the last list / map view
         if (id === 'map' && tab === 'favorite') Store.state.mapTab = Store.state.mapView || 'list';
@@ -508,7 +497,6 @@ const App = (() => {
 
   function showFatal(err) {
     clearTimers();
-    $nav.hidden = true;
     $app.innerHTML = '';
     const wrap = h('<div class="screen panel">' +
       '<div class="card fatal">' +
@@ -788,7 +776,6 @@ const App = (() => {
     const uni = mob ? Store.uniById(mob.university_id)
       : pend ? Store.uniById(pend.university_id)
       : (st.activeUniId ? Store.uniById(st.activeUniId) : null);
-    const tiles = MENU[mob ? 'journey' : 'explore'];
 
     let info;
     if (pend && uni) {
@@ -830,14 +817,8 @@ const App = (() => {
 
     const wrap = h('<div class="screen panel home">' +
       '<div class="home-globe globe-box" id="home-globe"></div>' +
-      '<div class="home-side">' + info +
-      '<p class="section-label menu-label">' + esc(T('Menu')) + '</p>' +
-      '<div class="menu-grid">' + tiles.map(t =>
-        '<button class="menu-tile" data-go="' + t[0] + '"><span class="mt-ico">' + icon(t[2]) + '</span>' +
-        '<span class="mt-t">' + esc(T(t[1])) + '</span><span class="mt-s">' + esc(T(t[3])) + '</span></button>').join('') +
-      '</div></div></div>');
+      '<div class="home-side">' + info + '</div></div>');
 
-    wrap.querySelectorAll('[data-go]').forEach(b => { b.onclick = () => go(b.dataset.go); });
     const bind = (id, fn) => { const el = wrap.querySelector(id); if (el) el.onclick = fn; };
     bind('#h-map', () => go('map'));
     bind('#h-open', () => go('uni'));
@@ -1082,15 +1063,6 @@ const App = (() => {
       '<div class="card">' +
       '<p class="section-label">' + esc(T('Settings')) + '</p>' +
       (ob ? '<p class="hint" style="margin-top:0">' + esc(ob) + '</p>' : '') +
-      '<div class="form-field"><label>' + esc(T('Theme')) + '</label>' +
-      '<div class="select-wrap"><select id="set-theme">' +
-      '<option value="dark" ' + sel(st.theme !== 'light') + '>' + esc(T('Dark')) + '</option>' +
-      '<option value="light" ' + sel(st.theme === 'light') + '>' + esc(T('Light')) + '</option>' +
-      '</select>' + icon('chevron-down', 'sel-ico') + '</div></div>' +
-      '<div class="form-field"><label>' + esc(T('Language')) + '</label>' +
-      '<div class="select-wrap"><select id="set-lang">' +
-      LANGS.map(l => '<option value="' + l[0] + '" ' + sel(st.language === l[0]) + '>' + esc(l[1]) + '</option>').join('') +
-      '</select>' + icon('chevron-down', 'sel-ico') + '</div></div>' +
       '<button class="ghost" id="redo-onb">' + esc(T('Redo setup')) + '</button>' +
       '</div>' +
       '<div class="card">' +
@@ -1143,12 +1115,6 @@ const App = (() => {
         semester_abroad: wrap.querySelector('#f-sem').value,
       });
       go('subjects');
-    };
-    wrap.querySelector('#set-theme').onchange = e => { setTheme(e.target.value); toast(T(e.target.value === 'light' ? 'Light' : 'Dark')); };
-    wrap.querySelector('#set-lang').onchange = async e => {
-      await Store.setLanguage(e.target.value);
-      render();
-      toast(e.target.value === 'ro' ? 'Română' : 'English');
     };
     wrap.querySelector('#redo-onb').onclick = () => go('onboarding');
     const installBtn = wrap.querySelector('#install-app');

@@ -173,7 +173,7 @@ const Term = (() => {
   }
 
   function focusables() {
-    const all = document.querySelectorAll('#app button, #app input, #app select, #app textarea, #app [tabindex="0"], #bottomNav button, #topBar button');
+    const all = document.querySelectorAll('#app button, #app input, #app select, #app textarea, #app [tabindex="0"], #topBar button');
     return [].filter.call(all, el => el.offsetParent !== null && !el.disabled && el.id !== 'term-in');
   }
 

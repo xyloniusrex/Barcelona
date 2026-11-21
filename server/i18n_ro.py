@@ -39,6 +39,8 @@ RO = {
     "Every step, in order": "Fiecare pas, în ordine",
     "Erasmus papers and ID": "Acte Erasmus și identitate",
     "Scan a document": "Scanează un document",
+    "Scan": "Scanează",
+    "Home": "Acasă",
     "Understand any paper": "Înțelege orice act",
 
     # ---- landing + login

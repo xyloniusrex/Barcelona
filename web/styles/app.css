@@ -38,7 +38,7 @@
   --card-shadow: none;
   --check-img: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23070B14' stroke-width='3.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E");
 
-  --nav-h: 64px;
+  --nav-h: 0px;          /* no bottom bar any more: the menu is in the top bar */
   --topbar: 60px;
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
@@ -362,55 +362,64 @@ body.no-scroll { overflow: hidden; }
 #topBar[hidden] { display: none; }
 #topBar { justify-content: flex-start; }
 .top-brand { display: inline-flex; align-items: center; padding: 6px 4px; border-radius: 10px; color: var(--text); }
-.top-spacer { flex: 1; }
 .top-actions { display: inline-flex; align-items: center; gap: 6px; }
 .top-btn { width: 40px; height: 40px; border-radius: 12px; background: color-mix(in srgb, var(--surface-2) 82%, transparent); }
 .top-btn .icon { width: 19px; height: 19px; vertical-align: top; }
 .top-btn.on { color: var(--accent-live); border-color: var(--accent-line); background: var(--accent-soft); }
 .top-lang { font: 700 12px/1 var(--font); letter-spacing: .04em; }
 
-/* -------------------------------------------------------------- bottom nav */
-#bottomNav {
-  position: fixed;
-  left: 0; right: 0; bottom: 0;
-  z-index: 20;
+/* ------------------------------------------------- menu (inside the top bar) */
+#topBar { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; }
+.top-left { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+#topBar .top-actions { justify-self: end; }
+.top-nav {
   display: flex;
-  justify-content: space-around;
-  height: calc(var(--nav-h) + var(--safe-bottom));
-  padding: 6px 8px var(--safe-bottom);
-  background: color-mix(in srgb, var(--surface) 90%, transparent);
-  -webkit-backdrop-filter: blur(16px);
-  backdrop-filter: blur(16px);
-  border-top: 1px solid var(--border);
-}
-#bottomNav[hidden] { display: none; }
-#bottomNav button {
-  position: relative;
-  flex: 1;
-  max-width: 128px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
   gap: 4px;
-  border-radius: 12px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--surface) 80%, transparent);
+}
+.top-nav button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 38px;
+  padding: 0 14px;
+  border-radius: 10px;
   color: var(--text-2);
-  font: 500 11px/1 var(--font);
-  transition: color .15s;
+  font: 600 13.5px/1 var(--font);
+  white-space: nowrap;
+  transition: color .15s, background .15s;
 }
-#bottomNav button:hover { color: var(--text); }
-#bottomNav button.active { color: var(--accent-live); }
-#bottomNav button.active::before {
-  content: "";
-  position: absolute;
-  top: -6px; left: 50%;
-  width: 28px; height: 3px;
-  margin-left: -14px;
-  border-radius: 0 0 3px 3px;
-  background: var(--accent-live);
+.top-nav button:hover { color: var(--text); }
+.top-nav button.active { color: var(--accent-live); background: var(--accent-soft); }
+.top-nav .icon { width: 18px; height: 18px; vertical-align: top; }
+.top-nav .ico { position: relative; display: inline-flex; }
+
+/* narrow screens: logo + actions on the first row, the menu full width under them */
+@media (max-width: 859px) {
+  body.with-nav { --topbar: 112px; }
+  body.with-nav #topBar {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "left actions" "nav nav";
+    grid-template-rows: 56px 48px;
+    align-content: start;
+  }
+  body.with-nav .top-left { grid-area: left; }
+  body.with-nav #topBar .top-actions { grid-area: actions; }
+  body.with-nav .top-nav { grid-area: nav; align-self: start; }
+  .top-nav button { flex: 1; justify-content: center; gap: 6px; padding: 0 6px; font-size: 12.5px; min-width: 0; }
+  .top-nav button > span:last-child { overflow: hidden; text-overflow: ellipsis; }
 }
-#bottomNav .icon { width: 22px; height: 22px; vertical-align: top; }
-#bottomNav .ico { position: relative; }
+@media (max-width: 420px) {
+  /* up to four items: icon over label so they all fit */
+  .top-nav button { flex-direction: column; gap: 3px; min-height: 42px; font-size: 10.5px; }
+  .top-nav .icon { width: 17px; height: 17px; }
+  body.with-nav { --topbar: 116px; }
+  body.with-nav #topBar { grid-template-rows: 56px 52px; }
+}
+
 .nav-cd {
   position: absolute;
   top: -8px;
@@ -787,23 +796,6 @@ button.cal-cell:hover { border-color: var(--border); }
 .route-sub { margin: 8px 0 14px; }
 .home-actions { display: flex; gap: 10px; }
 .home-actions > button { flex: 1; }
-.menu-label { margin: 18px 0 10px; }
-.menu-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-.menu-tile {
-  display: flex; flex-direction: column; align-items: flex-start; gap: 3px;
-  padding: 14px; text-align: left;
-  border: 1px solid var(--border); border-radius: 16px;
-  background: color-mix(in srgb, var(--surface) 86%, transparent);
-  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
-  box-shadow: var(--card-shadow);
-  transition: border-color .15s, transform .1s;
-}
-.menu-tile:hover { border-color: var(--accent-line); }
-.menu-tile:active { transform: scale(.985); }
-.mt-ico { display: inline-flex; align-items: center; justify-content: center; width: 38px; height: 38px; margin-bottom: 8px; border-radius: 12px; background: var(--accent-soft); color: var(--accent-live); }
-.mt-ico .icon { width: 20px; height: 20px; vertical-align: top; }
-.mt-t { font: 600 15px/20px var(--font); color: var(--text); }
-.mt-s { font: 400 12.5px/17px var(--font); color: var(--text-3); }
 
 /* --------------------------------------------------------------------- intro */
 #intro {
@@ -1077,7 +1069,6 @@ body:has(> .sheet)::before { content: ""; position: fixed; inset: 0; z-index: 29
     rotate: -1.5deg;
     animation: rise .5s .32s ease-out both, float 7s 3.3s ease-in-out infinite;
   }
-  .menu-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 
   /* home: the globe on the left (sticky), countdown + menu on the right */
   body[data-screen="home"] .panel { max-width: 1040px; padding-bottom: 48px !important; }
@@ -1088,18 +1079,6 @@ body:has(> .sheet)::before { content: ""; position: fixed; inset: 0; z-index: 29
     min-height: 420px; margin: 0;
   }
 
-  /* nav becomes a floating pill instead of a full-width bar */
-  #bottomNav {
-    left: 50%; right: auto; bottom: 20px;
-    width: min(520px, calc(100% - 40px));
-    height: var(--nav-h);
-    padding: 6px 10px;
-    transform: translateX(-50%);
-    border: 1px solid var(--border);
-    border-radius: 20px;
-    box-shadow: var(--shadow);
-  }
-  #bottomNav button.active::before { top: -7px; }
   #toast { bottom: calc(var(--nav-h) + 44px); }
 
   /* the Universities screen uses the wide layout */
