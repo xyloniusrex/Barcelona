@@ -522,14 +522,16 @@ const App = (() => {
       '<h1>' + esc(T('Leave on Erasmus.')) + '<br/><em>' + esc(T('Return with every credit.')) + '</em></h1>' +
       '<p class="slogan">' + esc(T('PoliGo plans your exchange from Timișoara: match UPT subjects with partner universities, keep the paperwork on schedule, read any foreign document.')) + '</p>' +
       '</div>' +
-      '<div class="features">' +
-      '<div class="feat"><span class="feat-no">01</span><span><span class="f-title">' + esc(T('Find your matches')) + '</span><span class="f-sub">' + esc(T('Partner universities ranked by how much of your 30 ECTS they cover.')) + '</span></span></div>' +
-      '<div class="feat"><span class="feat-no">02</span><span><span class="f-title">' + esc(T('Stay on schedule')) + '</span><span class="f-sub">' + esc(T('A calendar and timeline built around your mobility dates and project deadlines.')) + '</span></span></div>' +
-      '<div class="feat"><span class="feat-no">03</span><span><span class="f-title">' + esc(T('Read any document')) + '</span><span class="f-sub">' + esc(T('Scan a rental contract or registration form and get plain answers.')) + '</span></span></div>' +
-      '</div>' +
-      '<button class="primary" id="login-btn">' + icon('log-in', 'inline-ico') + ' ' + esc(T('Log in with your student email')) + '</button>' +
+      '<div class="login-core">' +
+      '<button class="primary login-cta" id="login-btn">' + icon('log-in', 'inline-ico') + ' ' + esc(T('Log in with your student email')) + '</button>' +
       '<p class="hint login-note">' + esc(T('Students of UPT only: name@student.upt.ro')) + '</p>' +
       '<button class="link" id="skip-btn">' + esc(T('Explore without an account')) + '</button>' +
+      '</div>' +
+      '<div class="features">' +
+      '<div class="feat feat-1"><span class="feat-no">01</span><span><span class="f-title">' + esc(T('Find your matches')) + '</span><span class="f-sub">' + esc(T('Partner universities ranked by how much of your 30 ECTS they cover.')) + '</span></span></div>' +
+      '<div class="feat feat-2"><span class="feat-no">02</span><span><span class="f-title">' + esc(T('Stay on schedule')) + '</span><span class="f-sub">' + esc(T('A calendar and timeline built around your mobility dates and project deadlines.')) + '</span></span></div>' +
+      '<div class="feat feat-3"><span class="feat-no">03</span><span><span class="f-title">' + esc(T('Read any document')) + '</span><span class="f-sub">' + esc(T('Scan a rental contract or registration form and get plain answers.')) + '</span></span></div>' +
+      '</div>' +
       '<div class="updates">' +
       '<span class="f-title">' + esc(T('Get notified at launch')) + '</span>' +
       '<div class="updates-row">' +

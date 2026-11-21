@@ -434,9 +434,43 @@ body.no-scroll { overflow: hidden; }
 }
 
 /* ---------------------------------------------------------------- landing */
-.landing { max-width: 600px; margin: 0 auto; padding: calc(var(--topbar) + var(--safe-top) + 28px) 20px 56px; }
+.landing { max-width: 600px; margin: 0 auto; padding: calc(var(--topbar) + var(--safe-top) + 20px) 20px 56px; }
 .login-note { margin: 10px 0 0; text-align: center; font-size: 13px; color: var(--text-3); }
-.hero { margin: 0 0 28px; }
+.hero { margin: 0 0 22px; text-align: center; }
+
+/* the login block: the focal point of the landing page */
+.login-core {
+  position: relative;
+  margin: 0 0 30px;
+  padding: 22px 18px 12px;
+  border: 1px solid var(--accent-line);
+  border-radius: 24px;
+  background: color-mix(in srgb, var(--surface) 80%, transparent);
+  -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+  box-shadow: 0 0 0 6px var(--accent-soft), 0 18px 50px var(--glow);
+  animation: rise .5s ease-out both;
+}
+.login-cta {
+  display: flex; width: 100%;
+  min-height: 58px;
+  border-radius: 16px;
+  font-size: 17px;
+  animation: cta-pulse 2.8s ease-in-out infinite;
+}
+@keyframes cta-pulse {
+  0%, 100% { box-shadow: 0 0 22px var(--glow), 0 0 0 0 var(--accent-line); }
+  50%      { box-shadow: 0 0 34px var(--glow), 0 0 0 8px transparent; }
+}
+
+/* the presentation texts drift gently around the login block */
+.features .feat { animation: rise .5s ease-out both, float 7s ease-in-out infinite; }
+.feat-1 { animation-delay: .08s, .6s; }
+.feat-2 { animation-delay: .16s, 2.4s; margin-left: 18px; }
+.feat-3 { animation-delay: .24s, 4.2s; margin-right: 18px; }
+@keyframes float {
+  0%, 100% { translate: 0 0; }
+  50%      { translate: 0 -7px; }
+}
 .hero h1 { font: 700 40px/1.08 var(--display); letter-spacing: -0.035em; margin-bottom: 16px; }
 .hero h1 em { font-style: normal; color: var(--gold); }
 .slogan { font-size: 17px; line-height: 26px; color: var(--text-2); }
@@ -1010,7 +1044,36 @@ body:has(> .sheet)::before { content: ""; position: fixed; inset: 0; z-index: 29
 @media (min-width: 900px) {
   :root { --topbar: 64px; }
   .hero h1 { font-size: 52px; }
-  .landing { padding-top: calc(var(--topbar) + 40px); }
+  /* landing: login in the middle, the presentation texts floating around it */
+  .landing {
+    max-width: 1180px;
+    min-height: 100vh; min-height: 100dvh;
+    padding: calc(var(--topbar) + 32px) 32px 48px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(360px, 430px) minmax(0, 1fr);
+    grid-template-areas:
+      "hero hero hero"
+      "f1   core f2"
+      "f3   core upd";
+    gap: 28px 44px;
+    align-content: center;
+  }
+  .hero { grid-area: hero; max-width: 760px; margin: 0 auto 12px; }
+  .features { display: contents; }
+  .login-core { grid-area: core; align-self: center; margin: 0; padding: 30px 26px 14px; }
+  .login-cta { min-height: 64px; font-size: 18px; }
+  .feat-1 { grid-area: f1; align-self: end; margin: 0 0 0 24px; rotate: -2deg; }
+  .feat-2 { grid-area: f2; align-self: end; margin: 0 24px 26px 0; rotate: 2deg; }
+  .feat-3 { grid-area: f3; align-self: start; margin: 26px 0 0 0; rotate: 1.5deg; }
+  .updates {
+    grid-area: upd; align-self: start;
+    margin: 0 0 0 20px; padding: 16px;
+    border: 1px solid var(--border); border-radius: 16px;
+    background: color-mix(in srgb, var(--surface) 86%, transparent);
+    -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+    rotate: -1.5deg;
+    animation: rise .5s .32s ease-out both, float 7s 3.3s ease-in-out infinite;
+  }
   .menu-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 
   /* home: the globe on the left (sticky), countdown + menu on the right */
