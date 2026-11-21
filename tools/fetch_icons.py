@@ -15,7 +15,7 @@ ICONS = {
     "house": "house", "external-link": "external-link", "clock": "clock",
 }
 
-FLAGS = ["at", "pt", "be", "lv", "ro", "nl", "de", "fi", "hu"]
+FLAGS = ["at", "pt", "be", "lv", "ro", "nl", "de", "fi", "hu", "fr", "it", "pl", "se"]
 
 LUCIDE = "https://cdn.jsdelivr.net/npm/lucide-static@0.525.0/icons/{name}.svg"
 FLAGS_URL = "https://cdn.jsdelivr.net/npm/flag-icons@7.2.3/flags/4x3/{code}.svg"

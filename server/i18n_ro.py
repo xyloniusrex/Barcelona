@@ -250,6 +250,7 @@ RO = {
     "Added to shortlist": "Adăugat în lista scurtă",
     "Added to favorites": "Adăugat la preferate",
     "max 3, in order of preference": "maximum 3, în ordinea preferinței",
+    "Save as many as you like, in order of preference.": "Salvează câte vrei, în ordinea preferinței.",
     "Nothing here yet. Open a university and tap \"Shortlist\".": "Nimic aici încă. Deschide o universitate și apasă „Lista scurtă”.",
     "Nothing here yet. Open a university and tap \"Favorite\".": "Nimic aici încă. Deschide o universitate și apasă „Favorite”.",
     "Accepted": "Acceptat",

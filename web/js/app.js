@@ -1264,7 +1264,7 @@ const App = (() => {
     // ":has(> ...)" rules in app.css (flat-list styling, the wide-screen
     // globe grid) key off that, so the tab row must not add a wrapper div.
     const bodyHtml = tab === 'favorite'
-      ? '<p class="hint">' + esc(T('max 3, in order of preference')) + '</p>' +
+      ? '<p class="hint">' + esc(T('Save as many as you like, in order of preference.')) + '</p>' +
         '<p class="hint" id="fav-empty" hidden>' + esc(T('Nothing here yet. Open a university and tap "Favorite".')) + '</p>' +
         '<div id="sl-list"></div>'
       : '<div id="filters"></div><div id="uni-list"></div>';
