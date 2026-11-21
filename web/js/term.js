@@ -1,15 +1,52 @@
 /* term.js — summonable command line + keyboard navigation.
  *
- * Summon with ` (backquote). Hidden by default; nothing renders until it is
- * opened. Commands: go <screen>, settings:theme:dark|light,
- * settings:language:en|ro, settings:mode:explore|journey, refresh, login,
- * admin, logout, help, clear, close. ArrowUp/ArrowDown (with no text field
- * focused) move keyboard focus through the active screen; Enter activates.
+ * Summon with ` or ~ (any keyboard layout, detection by physical key) or
+ * Ctrl+`. Hidden by default. Fish-style completion: a ghost suggestion is
+ * shown while typing; Tab or ArrowRight (at the end of the line) accepts it;
+ * Tab lists all completions when several commands share the prefix. Input
+ * history on ArrowUp/ArrowDown. Outside the input, arrows move keyboard
+ * focus between controls and Escape goes back.
  */
 const Term = (() => {
-  let box = null, out = null, input = null;
+  let box = null, out = null, input = null, gTyped = null, gRest = null;
   let open = false;
   let history = [], histPos = -1;
+
+  const SCREENS = ['landing', 'auth', 'onboarding', 'docsSetup', 'map', 'universities', 'shortlist', 'subjects', 'profile', 'today', 'calendar', 'timeline', 'docs', 'admin', 'uni', 'scanJ'];
+  const THEME_VALUES = ['dark', 'light'];
+  const LANGUAGE_VALUES = ['en', 'ro'];
+  const MODE_VALUES = ['explore', 'journey'];
+
+  function completionsFor(line) {
+    line = line.toLowerCase();
+    const cmds = [
+      'help', 'go ', 'login', 'admin', 'logout', 'refresh', 'clear', 'close',
+      'settings:theme:dark', 'settings:theme:light',
+      'settings:language:en', 'settings:language:ro',
+      'settings:mode:explore', 'settings:mode:journey',
+    ];
+    if (line.startsWith('go ')) {
+      const arg = line.slice(3);
+      return SCREENS.filter(s => arg === '' || s.startsWith(arg)).map(s => 'go ' + s);
+    }
+    if (line.startsWith('settings:')) {
+      return COMPLETE_settings(line).map(s => 'settings:' + s);
+    }
+    return cmds.filter(c => c.startsWith(line));
+  }
+
+  function COMPLETE_settings(line) {
+    const keys = ['theme:', 'language:', 'mode:'];
+    const rest = line.slice(9);
+    if (rest === '') return keys.map(k => k.slice(0, -1));
+    for (const [k, values] of [['theme:', THEME_VALUES], ['language:', LANGUAGE_VALUES], ['mode:', MODE_VALUES]]) {
+      if (rest.startsWith(k)) {
+        return values.filter(v => v.startsWith(rest.slice(k.length))).map(v => k + v);
+      }
+      if (k.startsWith(rest)) return [k];
+    }
+    return [];
+  }
 
   function build() {
     if (box) return;
@@ -19,36 +56,101 @@ const Term = (() => {
     box.innerHTML =
       '<div id="term-out" class="term-out" aria-live="polite"></div>' +
       '<div class="term-in-row"><span class="term-prompt">&gt;</span>' +
-      '<input id="term-in" autocomplete="off" spellcheck="false" /></div>' +
-      '<p class="term-hint">` close</p>';
+      '<span class="term-line"><input id="term-in" autocomplete="off" spellcheck="false" />' +
+      '<span class="term-ghost" aria-hidden="true"><span class="g-typed"></span><span class="g-rest"></span></span>' +
+      '</span></div>' +
+      '<p class="term-hint">` close - tab or right arrow accepts - arrows move focus outside the input</p>';
     document.body.appendChild(box);
     out = box.querySelector('#term-out');
     input = box.querySelector('#term-in');
+    gTyped = box.querySelector('.g-typed');
+    gRest = box.querySelector('.g-rest');
+
+    input.addEventListener('input', () => drawGhost());
     input.addEventListener('keydown', async e => {
       if (e.key === 'Enter') {
-        const line = input.value.trim();
+        e.preventDefault();
+        const line = suggestion() || input.value.trim();
         input.value = '';
+        drawGhost();
         histPos = -1;
-        if (line) { history.push(line); await exec(line); }
+        if (!line) return;
+        history.push(line);
+        await exec(line);
+      } else if (e.key === 'Tab') {
+        e.preventDefault();
+        completeOrList();
+      } else if (e.key === 'ArrowRight' && atEnd()) {
+        const sugg = suggestion();
+        if (sugg) { e.preventDefault(); input.value = sugg; drawGhost(); }
       } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
         if (histPos < 0) histPos = history.length;
         histPos = Math.max(0, histPos - 1);
         input.value = history[histPos] || '';
-        e.preventDefault();
+        drawGhost();
       } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
         histPos = Math.min(history.length, histPos + 1);
         input.value = history[histPos] || '';
+        drawGhost();
       } else if (e.key === 'Escape') {
         hide();
       }
     });
-    print('poligo terminal - type help');
+    print('poligo terminal - type help - tab completes like fish');
+  }
+
+  function atEnd() {
+    return input.selectionStart === input.value.length && input.selectionStart === input.selectionEnd;
+  }
+
+  function suggestion() {
+    const cands = completionsFor(input.value.trim().toLowerCase());
+    if (!cands.length || cands.length === 1 && cands[0] === input.value.trim().toLowerCase()) return '';
+    const v = input.value.trim().toLowerCase();
+    const hit = cands.find(c => c !== v);
+    return hit || '';
+  }
+
+  function commonPrefix(lines) {
+    if (!lines.length) return '';
+    let p = lines[0];
+    for (const l of lines) {
+      let i = 0;
+      while (i < p.length && i < l.length && p[i] === l[i]) i++;
+      p = p.slice(0, i);
+    }
+    return p;
+  }
+
+  function completeOrList() {
+    const v = input.value.trim().toLowerCase();
+    if (!v) { drawGhost(); return; }
+    const cands = completionsFor(v);
+    if (!cands.length) return;
+    if (cands.length === 1) {
+      input.value = cands[0];
+    } else {
+      const common = commonPrefix(cands);
+      if (common.length > v.length) input.value = common;
+      print(cands.join('   '));
+    }
+    drawGhost();
+  }
+
+  function drawGhost() {
+    const rest = suggestion();
+    const v = input.value;
+    gTyped.textContent = v;
+    gRest.textContent = rest.slice(v.length);
   }
 
   function show() {
     build();
     open = true;
     box.hidden = false;
+    drawGhost();
     input.focus();
     print('ready.');
   }
@@ -71,7 +173,7 @@ const Term = (() => {
 
   function focusables() {
     const all = document.querySelectorAll('#app button, #app input, #app select, #app textarea, #app [tabindex="0"], #bottomNav button, #topBar button');
-    return [].filter.call(all, el => el.offsetParent !== null && !el.disabled);
+    return [].filter.call(all, el => el.offsetParent !== null && !el.disabled && el.id !== 'term-in');
   }
 
   function arrowFocus(dir) {
@@ -81,10 +183,11 @@ const Term = (() => {
     let i = els.indexOf(cur);
     if (i === -1) i = dir > 0 ? -1 : 0;
     const next = els[(i + dir + els.length) % els.length];
-    if (next) next.focus();
+    if (next) {
+      next.focus();
+      if (next.scrollIntoView) next.scrollIntoView({ block: 'nearest' });
+    }
   }
-
-  const SCREENS = ['landing', 'auth', 'onboarding', 'docsSetup', 'map', 'universities', 'shortlist', 'subjects', 'profile', 'today', 'calendar', 'timeline', 'docs', 'admin', 'uni', 'scanJ'];
 
   const COMMANDS = {
     help: () => [
@@ -97,7 +200,8 @@ const Term = (() => {
       'logout            end the session on this device',
       'refresh           reload all data from the server and re-render',
       'clear, close      clear output / hide this terminal',
-      'keyboard: arrows move focus between controls, activate with Enter',
+      'typing: tab or right arrow accepts the ghost suggestion; tab lists all matches',
+      'outside the input: up/down/left/right arrows move focus between controls, activate with enter; escape goes back',
     ],
     go: (arg) => {
       const s = (arg || '').trim().toLowerCase();
@@ -110,22 +214,19 @@ const Term = (() => {
       const key = parts[0], val = parts[1];
       if (!val) return ['usage: settings:<key>:<value>  keys: theme, language, mode'];
       if (key === 'theme') {
-        if (val !== 'dark' && val !== 'light') return ['theme must be dark or light'];
+        if (THEME_VALUES.indexOf(val) === -1) return ['theme must be dark or light'];
         Store.setTheme(val);
         App.render();
         return ['theme -> ' + val];
       }
-      if (key === 'language') {
-        return ['language...']; // replaced below (async)
-      }
       if (key === 'mode') {
-        if (['explore', 'journey'].indexOf(val) === -1) return ['mode must be explore or journey'];
+        if (MODE_VALUES.indexOf(val) === -1) return ['mode must be explore or journey'];
         Store.saveProfile({}, val).then(() => App.render());
         return ['mode -> ' + val];
       }
       return ['unknown setting: ' + key + ' - keys: theme, language, mode'];
     },
-    login: () => { App.go('auth', { replace: true }); return ['-> auth: enter your upts mail']; },
+    login: () => { App.go('auth', { replace: true }); return ['-> auth: enter your upt mail']; },
     admin: () => { App.go('admin', { replace: true }); return ['-> admin']; },
     logout: async () => { await Store.logout(); App.go('landing', { replace: true }); return ['signed out']; },
     refresh: async () => {
@@ -139,55 +240,70 @@ const Term = (() => {
 
   async function exec(line) {
     print('> ' + line, 'term-echo');
-    const [cmdRaw, ...rest] = line.split(/\s+/);
-    const cmd = cmdRaw.toLowerCase();
-    let fn = COMMANDS[cmd];
-    let result;
-    if (!fn) {
-      // dotted form: settings:theme:dark comes in as one token
-      const parts = line.split(':');
-      if (COMMANDS[parts[0].toLowerCase()]) fn = COMMANDS[parts[0].toLowerCase()], rest[0] = parts.slice(1).join(':');
-    }
-    if (!fn) { print('unknown command: ' + cmd + ' - try help'); return; }
     try {
-      if (cmd === 'settings' && rest[0] && rest[0].indexOf(':') !== -1) {
-        const kv = rest[0].split(':');
-        if (kv[0].toLowerCase() === 'language') {
-          const out2 = await Store.setLanguage(kv[1] || 'en');
-          App.render();
-          result = ['language -> ' + (kv[1] || 'en') + (out2 && out2.saved ? ' (translations cached)' : '')];
-        } else {
-          result = await fn(rest.join(' '));
-        }
-      } else {
-        result = await fn(rest.join(' '));
+      if (line.toLowerCase().startsWith('settings:')) {
+        const out2 = await settingsCommand(line);
+        if (typeof out2 === 'string') { print(out2, 'term-err'); return; }
+        for (const l of out2) print(l);
+        return;
       }
+      const [cmd, ...rest] = line.split(/\s+/);
+      const fn = COMMANDS[cmd.toLowerCase()];
+      if (!fn) { print('unknown command: ' + cmd + ' - try help', 'term-err'); return; }
+      const result = await fn(rest.join(' '));
       for (const l of result || []) print(l);
     } catch (e) {
       print((e && e.code ? e.code + ': ' : '') + (e && e.message ? e.message : 'command failed'), 'term-err');
     }
   }
 
+  async function settingsCommand(line) {
+    // line: settings:<key>:<value>
+    const parts = line.split(':').map(x => x.trim().toLowerCase());
+    const key = parts[1], val = parts[2];
+    if (!key) return 'usage: settings:<key>:<value>  keys: theme, language, mode';
+    if (key === 'theme') {
+      if (THEME_VALUES.indexOf(val) === -1) return 'theme must be dark or light';
+      Store.setTheme(val);
+      App.render();
+      return ['theme -> ' + val];
+    }
+    if (key === 'language') {
+      const lang = LANGUAGE_VALUES.indexOf(val) !== -1 ? val : 'en';
+      await Store.setLanguage(lang);
+      App.render();
+      return ['language -> ' + lang];
+    }
+    if (key === 'mode') {
+      if (MODE_VALUES.indexOf(val) === -1) return 'mode must be explore or journey';
+      await Store.saveProfile({}, val);
+      App.render();
+      return ['mode -> ' + val];
+    }
+    return 'unknown setting: ' + key + ' - keys: theme, language, mode';
+  }
+
   document.addEventListener('keydown', e => {
     const inField = /^(input|textarea|select)$/i.test(document.activeElement.tagName);
-    if (e.key === '`' || (e.ctrlKey && e.key === '`')) {
+    if (e.code === 'Backquote' && !inField) {
       e.preventDefault();
       toggle();
       return;
     }
     if (open) {
-      if (e.key === 'Escape') { hide(); }
+      if (e.key === 'Escape' && document.activeElement !== input) hide();
       return;
     }
     if (document.activeElement && document.activeElement.id === 'anim') return;
     if (inField) return;
-    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    if (['ArrowDown', 'ArrowUp', 'ArrowLeft', 'ArrowRight'].indexOf(e.key) !== -1) {
       e.preventDefault();
-      arrowFocus(e.key === 'ArrowDown' ? 1 : -1);
+      const dirs = { ArrowDown: 1, ArrowUp: -1, ArrowRight: 1, ArrowLeft: -1 };
+      arrowFocus(dirs[e.key]);
     } else if (e.key === 'Escape') {
       App.goBack();
     }
   });
 
-  return { toggle, show, hide, exec: l => { show(); return exec(l); }, isOpen: () => open };
+  return { toggle, show, hide, exec: l => { show(); return exec(l); }, isOpen: () => open, _complete: completionsFor };
 })();
