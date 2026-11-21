@@ -407,7 +407,7 @@ const App = (() => {
       '<div class="top-actions">' +
       '<button class="icon-btn top-btn top-lang" id="tb-lang" aria-label="' + esc(T('Language')) + '">' + (isRo() ? 'EN' : 'RO') + '</button>' +
       '<button class="icon-btn top-btn" id="tb-theme" aria-label="' + esc(T(isLight() ? 'Switch to dark theme' : 'Switch to light theme')) + '">' + icon(isLight() ? 'moon' : 'sun') + '</button>' +
-      (hasHome && s !== 'home' ? '<button class="icon-btn top-btn" id="tb-home" aria-label="' + esc(T('Back to menu')) + '">' + icon('house') + '</button>' : '') +
+      (hasHome && !['home', 'map', 'subjects'].includes(s) ? '<button class="icon-btn top-btn" id="tb-home" aria-label="' + esc(T('Back to menu')) + '">' + icon('house') + '</button>' : '') +
       (hasHome ? '<button class="icon-btn top-btn' + (s === 'profile' ? ' on' : '') + '" id="tb-profile" aria-label="' + esc(T('Profile')) + '">' + icon('user') + '</button>' : '') +
       '</div>';
     const on = (id, fn) => { const el = $top.querySelector(id); if (el) el.onclick = fn; };
