@@ -8,13 +8,14 @@
  *    scans) so journeys still open offline.
  *  - never cached: writes (POST/PATCH/DELETE).
  */
-const VERSION = 'poligo-v9';
+const VERSION = 'poligo-v10';
 const SHELL = VERSION + '-shell';
 const DATA = VERSION + '-data';
 
 const PRECACHE = [
   '/', '/index.html', '/styles/app.css',
-  '/js/icons.js', '/js/store.js', '/js/anim.js', '/js/term.js', '/js/app.js',
+  '/js/icons.js', '/js/store.js', '/js/globe.js', '/js/stage.js', '/js/term.js', '/js/app.js',
+  '/vendor/d3-array.min.js', '/vendor/d3-geo.min.js', '/data/countries.geo.json', '/assets/icon.svg',
   '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png',
 ];
 
@@ -35,9 +36,10 @@ self.addEventListener('fetch', e => {
   if (req.method !== 'GET') return; // writes always hit the network
   const url = new URL(req.url);
 
-  // animation clips + immutable static assets: cache-first
+  // animation clips + immutable static assets: cache-first (the globe's libraries and map data too, so it works offline)
   if (url.pathname.startsWith('/anim/') || url.pathname.startsWith('/icons/') ||
       url.pathname.startsWith('/data/') || url.pathname.startsWith('/styles/') ||
+      url.pathname.startsWith('/vendor/') || url.pathname.startsWith('/assets/') ||
       url.pathname.startsWith('/js/') || url.pathname === '/' || url.pathname === '/index.html') {
     e.respondWith(cacheFirst(req, SHELL));
     return;

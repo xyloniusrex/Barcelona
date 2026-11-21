@@ -1,9 +1,11 @@
 /* globe.js - interactive canvas globe (d3-geo orthographic projection).
  * Copied from the PoliGo design repo (github.com/PavelCsako/PoliGo, js/globe.js)
  * and adapted as a classic script: the `export`s are gone and the API hangs off
- * window.PoliGlobe = { Globe, COLORS, loadWorld }. Needs vendor/d3-array.min.js
- * and vendor/d3-geo.min.js loaded first. Only changes vs upstream: the IIFE
- * wrapper and the absolute data path (the app is served from "/").
+ * window.PoliGlobe = { Globe, COLORS, loadWorld, PALETTES }. Needs
+ * vendor/d3-array.min.js and vendor/d3-geo.min.js loaded first.
+ * Changes vs upstream: the IIFE wrapper, the absolute data path (the app is
+ * served from "/"), a light palette, jumpTo() and `static` globes that only
+ * redraw when something changed (used for the page background).
  */
 (() => {
 const d3 = window.d3;
@@ -16,6 +18,13 @@ function loadWorld() {
   return worldPromise;
 }
 
+// Colours the globe is painted with. "dark" is the space-window look used on the
+// map, home and intro screens; "light" is for the page background in light theme.
+const PALETTES = {
+  dark: { sphere: ['#16263F', '#0C1526', '#060A12'], graticule: 'rgba(148,160,188,0.10)', land: 'rgba(233,238,248,0.065)', border: 'rgba(148,160,188,0.36)', labelFill: '#E9EEF8', labelStroke: 'rgba(7,11,20,0.8)' },
+  light: { sphere: ['#FBFDFF', '#E6EDF9', '#CFDBEF'], graticule: 'rgba(30,41,59,0.10)', land: 'rgba(15,23,42,0.08)', border: 'rgba(51,65,85,0.42)', labelFill: '#0B1220', labelStroke: 'rgba(244,246,251,0.92)' },
+};
+
 const ease = t => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
@@ -25,8 +34,11 @@ class Globe {
     this.o = {
       center: [12, 48], zoom: 1, minZoom: 0.45, maxZoom: 4,
       radius: (w, h) => Math.max(w, h) * 0.95, offsetY: 0,
-      autoRotate: 0, interactive: true, touchAction: 'none', halo: COLORS.cyan, ...opts,
+      autoRotate: 0, interactive: true, touchAction: 'none', halo: COLORS.cyan,
+      static: false, theme: 'dark', ...opts,
     };
+    this.palette = PALETTES[this.o.theme === 'light' ? 'light' : 'dark'];
+    this.dirty = true;
     this.rotate = [-this.o.center[0], -this.o.center[1], 0];
     this.zoom = this.o.zoom;
     this.points = []; this.highlights = []; this.arc = null; this.arcProgress = 1;
@@ -48,7 +60,7 @@ class Globe {
     this.ro.observe(container);
     this.resize();
     if (this.o.interactive) this.bind();
-    loadWorld().then(w => { this.world = w; this.byIso = new Map(w.features.map(f => [f.id, f])); });
+    loadWorld().then(w => { this.world = w; this.byIso = new Map(w.features.map(f => [f.id, f])); this.dirty = true; });
     this.running = true;
     const tick = now => { if (!this.running) return; if (!this.canvas.isConnected) return this.destroy(); this.frame(now); requestAnimationFrame(tick); };
     requestAnimationFrame(tick);
@@ -62,15 +74,31 @@ class Globe {
     this.dpr = Math.min(window.devicePixelRatio || 1, 2);
     this.canvas.width = Math.round(this.w * this.dpr); this.canvas.height = Math.round(this.h * this.dpr);
     this.canvas.style.width = this.w + 'px'; this.canvas.style.height = this.h + 'px';
+    this.dirty = true;
+    this.onResize?.();   // scenes that frame by size (js/stage.js) re-frame here
+  }
+
+  // Redraw on the next frame. Static globes (page background) only draw when asked.
+  invalidate() { this.dirty = true; }
+
+  setTheme(theme) {
+    this.palette = PALETTES[theme === 'light' ? 'light' : 'dark'];
+    this.dirty = true;
+  }
+
+  // Jump (no animation) to a view.
+  jumpTo([lon, lat], zoom = this.zoom) {
+    this.anim = null;
+    this.rotate = [-lon, -lat, 0]; this.zoom = zoom; this.dirty = true;
   }
 
   get radius() { return this.o.radius(this.w, this.h) * this.zoom; }
   get center() { return [-this.rotate[0], -this.rotate[1]]; }
 
-  setPoints(points) { this.points = points; }
-  setHighlights(h) { this.highlights = h; }
+  setPoints(points) { this.points = points; this.dirty = true; }
+  setHighlights(h) { this.highlights = h; this.dirty = true; }
   setArc(arc, { animate = false, duration = 1400 } = {}) {
-    this.arc = arc;
+    this.arc = arc; this.dirty = true;
     if (!arc || !animate) { this.arcProgress = 1; return Promise.resolve(); }
     this.arcProgress = 0;
     return this.tween(duration, t => { this.arcProgress = t; });
@@ -160,15 +188,21 @@ class Globe {
   }
 
   frame(now) {
+    let busy = !!this.anim || this.pointers.size > 0;
     if (this.anim) this.anim(now);
     else if (!this.pointers.size) {
       if (Math.abs(this.vel[0]) + Math.abs(this.vel[1]) > 0.002) {
         this.rotate = [this.rotate[0] + this.vel[0], clamp(this.rotate[1] + this.vel[1], -85, 85), 0];
         this.vel = [this.vel[0] * 0.93, this.vel[1] * 0.93];
+        busy = true;
       } else if (this.o.autoRotate && now > this.idleUntil) {
         this.rotate = [this.rotate[0] + this.o.autoRotate, this.rotate[1], 0];
+        busy = true;
       }
     }
+    // a static globe (the page background) sleeps until something changes
+    if (this.o.static && !busy && !this.dirty && !this.points.some(p => p.pulse)) return;
+    this.dirty = false;
     this.draw(now);
   }
 
@@ -183,16 +217,17 @@ class Globe {
     halo.addColorStop(0, hexA(this.o.halo, 0.22)); halo.addColorStop(1, hexA(this.o.halo, 0));
     ctx.fillStyle = halo; ctx.beginPath(); ctx.arc(cx, cy, r * 1.2, 0, Math.PI * 2); ctx.fill();
     const sph = ctx.createRadialGradient(cx - r * 0.35, cy - r * 0.4, 0, cx, cy, r * 1.3);
-    sph.addColorStop(0, '#16263F'); sph.addColorStop(0.55, '#0C1526'); sph.addColorStop(1, '#060A12');
+    const pal = this.palette;
+    sph.addColorStop(0, pal.sphere[0]); sph.addColorStop(0.55, pal.sphere[1]); sph.addColorStop(1, pal.sphere[2]);
     ctx.fillStyle = sph; ctx.beginPath(); this.path({ type: 'Sphere' }); ctx.fill();
 
-    ctx.lineWidth = 0.7; ctx.strokeStyle = 'rgba(148,160,188,0.10)';
+    ctx.lineWidth = 0.7; ctx.strokeStyle = pal.graticule;
     ctx.beginPath(); this.path(this.graticule); ctx.stroke();
 
     if (this.world) {
       ctx.beginPath(); this.path(this.world);
-      ctx.fillStyle = 'rgba(233,238,248,0.065)'; ctx.fill();
-      ctx.lineWidth = 0.6; ctx.strokeStyle = 'rgba(148,160,188,0.36)'; ctx.stroke();
+      ctx.fillStyle = pal.land; ctx.fill();
+      ctx.lineWidth = 0.6; ctx.strokeStyle = pal.border; ctx.stroke();
       for (const hl of this.highlights) {
         const f = this.byIso.get(hl.iso3); if (!f) continue;
         ctx.beginPath(); this.path(f);
@@ -251,8 +286,8 @@ class Globe {
       const align = p.anchor ?? 'start';
       ctx.textAlign = align === 'end' ? 'right' : align === 'middle' ? 'center' : 'left';
       const tx = x + (p.dx ?? 10), ty = y + (p.dy ?? 4);
-      ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(7,11,20,0.8)'; ctx.strokeText(p.label, tx, ty);
-      ctx.fillStyle = '#E9EEF8'; ctx.fillText(p.label, tx, ty);
+      ctx.lineWidth = 4; ctx.strokeStyle = this.palette.labelStroke; ctx.strokeText(p.label, tx, ty);
+      ctx.fillStyle = this.palette.labelFill; ctx.fillText(p.label, tx, ty);
     }
   }
 }
@@ -262,5 +297,5 @@ function hexA(hex, a) {
   return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
 }
 
-window.PoliGlobe = { Globe, COLORS, loadWorld };
+window.PoliGlobe = { Globe, COLORS, loadWorld, PALETTES };
 })();
