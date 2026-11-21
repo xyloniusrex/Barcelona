@@ -84,3 +84,33 @@ Scan (canned vision-model result; the real model call plugs into
 - Live AI matching of user-uploaded PDFs (hooks exist; matches are precomputed)
 - Email magic-link auth (device-scoped user ids in the prototype)
 - LA-draft PDF export, compare screen, return/recognition screen
+
+## Expose on a domain (Cloudflare Tunnel)
+
+`docker-compose.yml` ships an optional `cloudflared` connector service. It is
+off by default and joins the same network as `poligo`, so the dashboard only
+needs the internal name:
+
+1. Cloudflare Zero Trust -> Networks -> Tunnels -> Create tunnel -> copy the connector token.
+2. Save it in a `.env` file next to `docker-compose.yml` (`CLOUDFLARE_TOKEN=...`).
+   The token is a secret - never commit it.
+3. Start everything:
+   ```
+   docker compose --profile tunnel up -d
+   ```
+4. Back in the dashboard, add a public hostname for the tunnel ->
+   Service: `HTTP` / `poligo:8000`.
+
+Why manual `docker run` recipes often fail on Linux servers:
+`host.docker.internal` only exists on Docker Desktop. Inside the compose
+network this problem disappears (that is why the service here targets
+`poligo:8000` over plain HTTP). For an ad-hoc share without an account:
+
+```
+docker run --rm -d --name cloudflared --add-host=host.docker.internal:host-gateway \
+  cloudflare/cloudflared:latest tunnel --no-autoupdate --url http://host.docker.internal:8000
+```
+
+Quick-URLs are random and die with the container; use a named tunnel for a
+real deployment. The admin panel (`/#admin`) is reachable from the domain and
+protected only by the token in `data/admin_token.txt` inside the container.
