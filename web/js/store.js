@@ -18,7 +18,8 @@ const Store = (() => {
     universities: [],
     homeCourses: [],
     mobility: null,
-    pending: null,       // mobility sent for approval, waiting for an admin
+    pendings: [],        // mobilities sent for approval, waiting for an admin - can be more than one
+    mobilities: [],      // every application ever made (any status), newest first
     tasks: [],
     screen: 'welcome',
     activeUniId: null,
@@ -107,7 +108,8 @@ const Store = (() => {
     state.user = me;
     state.mode = me.mode || 'explore';
     state.mobility = me.mobility || null;
-    state.pending = me.pending || null;
+    state.pendings = me.pendings || [];
+    state.mobilities = me.mobilities || [];
     state.tasks = [];
     if (me.mobility) {
       try { state.tasks = (await api('/api/mobilities/' + me.mobility.id)).tasks; } catch (e) {}
@@ -248,7 +250,8 @@ const Store = (() => {
     state.sessionEmail = null;
     state.user = null;
     state.mobility = null;
-    state.pending = null;
+    state.pendings = [];
+    state.mobilities = [];
     state.tasks = [];
     state.availability = [];
     state.mode = 'explore';
@@ -281,11 +284,21 @@ const Store = (() => {
   }
 
   // Sends the acceptance for approval: the journey opens once an admin approves it.
+  // Several applications can be pending at once - this adds to the list, not over it.
   async function accept(payload) {
     const out = await api('/api/accepted', { method: 'POST', body: JSON.stringify(Object.assign({ user_id: state.userId }, payload)) });
-    state.pending = out.mobility;
+    state.pendings = [...state.pendings.filter(p => p.id !== out.mobility.id), out.mobility];
+    state.mobilities = [out.mobility, ...state.mobilities.filter(m => m.id !== out.mobility.id)];
     saveLocal();
     return out;
+  }
+
+  // Pulls back one of the student's own pending applications.
+  async function withdrawApplication(mobilityId) {
+    await api('/api/mobilities/' + mobilityId + '/withdraw', { method: 'POST', body: JSON.stringify({ user_id: state.userId }) });
+    state.pendings = state.pendings.filter(p => p.id !== mobilityId);
+    state.mobilities = state.mobilities.map(m => m.id === mobilityId ? Object.assign({}, m, { status: 'withdrawn' }) : m);
+    saveLocal();
   }
 
   // Re-read the user from the server (e.g. "has my mobility been approved yet?").
@@ -434,7 +447,7 @@ const Store = (() => {
 
   return {
     state, boot, saveProfile, saveLocal, uniById, score, sortedUnis,
-    addToShortlist, removeFromShortlist, accept, refresh, toggleTask, addTask, scan, getScans, getUniversityDetail,
+    addToShortlist, removeFromShortlist, accept, withdrawApplication, refresh, toggleTask, addTask, scan, getScans, getUniversityDetail,
     requestAuthCode, verifyAuthCode, logout, notify,
     getInbox, replyInbox, markInboxRead, adminApi, getAdminToken, setAdminToken,
     safeUserDocs, addUserDoc, updateUserDoc, deleteUserDoc, saveDocBlob, getDocBlob, deleteDocBlob,

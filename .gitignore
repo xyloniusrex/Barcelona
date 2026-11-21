@@ -2,3 +2,4 @@ data/poligo.db*
 __pycache__/
 *.pyc
 .vibe/
+data/admin_token.txt

@@ -467,7 +467,7 @@ const App = (() => {
   function syncStage() {
     const st = Store.state;
     const id = st.mode === 'journey' && st.mobility ? st.mobility.university_id
-      : st.pending ? st.pending.university_id : st.activeUniId;
+      : st.pendings[0] ? st.pendings[0].university_id : st.activeUniId;
     Stage.setDestination(id ? Store.uniById(id) : null);
   }
 
@@ -769,42 +769,65 @@ const App = (() => {
 
   /* ----------------------------------------------------------------- home */
 
+  // One card per application, newest first, stacked one after another on
+  // the same page - a student can have several at once (pending, one active,
+  // and whatever history piled up), not just a single current slot.
+  function mobilityCardHtml(m) {
+    const u = Store.uniById(m.university_id);
+    if (!u) return '';
+    const route = '<div class="route">' +
+      '<span class="route-city">' + flagImg('RO') + '<b>Timișoara</b></span>' +
+      '<span class="route-arrow">' + icon('arrow-right') + '</span>' +
+      '<span class="route-city">' + flagImg(u.country_code) + '<b>' + esc(u.city) + '</b></span>' +
+      '</div>' +
+      '<p class="hint route-sub">' + esc(u.name) + ' - ' + esc(T(u.country)) +
+      '<br/>' + esc(fmtDate(m.start_date)) + ' - ' + esc(fmtDate(m.end_date)) + '</p>';
+    if (m.status === 'active') {
+      return '<div class="card home-info">' + route + countdownHtml() +
+        '<button class="link" id="h-browse">' + esc(T('Browse other universities')) + '</button>' +
+        '</div>';
+    }
+    if (m.status === 'pending') {
+      return '<div class="card home-info">' + route +
+        '<p class="pending-pill"><span class="pill partial">' + icon('clock', 'sm-ico') + ' ' + esc(T('Waiting for approval')) + '</span></p>' +
+        '<div class="home-actions"><button class="ghost" data-withdraw="' + esc(m.id) + '">' + esc(T('Withdraw')) + '</button></div>' +
+        '</div>';
+    }
+    const pill = { archived: '<span class="pill good">' + icon('check', 'sm-ico') + ' ' + esc(T('Completed')) + '</span>',
+      rejected: '<span class="pill none">' + icon('x', 'sm-ico') + ' ' + esc(T('Not approved')) + '</span>',
+      withdrawn: '<span class="pill">' + esc(T('Withdrawn')) + '</span>' }[m.status] || '';
+    return '<div class="card home-info">' + route + '<p class="pending-pill">' + pill + '</p></div>';
+  }
+
   function viewHome(root) {
     const st = Store.state;
-    const mob = st.mode === 'journey' ? st.mobility : null;
-    const pend = !mob && st.pending ? st.pending : null;
-    const uni = mob ? Store.uniById(mob.university_id)
-      : pend ? Store.uniById(pend.university_id)
+    const mobs = (st.mobilities || []).filter(m => Store.uniById(m.university_id));
+    const activeMob = mobs.find(m => m.status === 'active');
+    const pendingMobs = mobs.filter(m => m.status === 'pending');
+    const focusUni = activeMob ? Store.uniById(activeMob.university_id)
+      : pendingMobs[0] ? Store.uniById(pendingMobs[0].university_id)
       : (st.activeUniId ? Store.uniById(st.activeUniId) : null);
 
     let info;
-    if (pend && uni) {
-      info = '<div class="card home-info">' +
-        '<div class="route">' +
-        '<span class="route-city">' + flagImg('RO') + '<b>Timișoara</b></span>' +
-        '<span class="route-arrow">' + icon('arrow-right') + '</span>' +
-        '<span class="route-city">' + flagImg(uni.country_code) + '<b>' + esc(uni.city) + '</b></span>' +
-        '</div>' +
-        '<p class="hint route-sub">' + esc(uni.name) + ' - ' + esc(T(uni.country)) +
-        '<br/>' + esc(fmtDate(pend.start_date)) + ' - ' + esc(fmtDate(pend.end_date)) + '</p>' +
-        '<p class="pending-pill"><span class="pill partial">' + icon('clock', 'sm-ico') + ' ' + esc(T('Waiting for approval')) + '</span></p>' +
-        '<p class="hint">' + esc(T('The Erasmus office has to confirm your acceptance. Your journey (steps, countdown, documents) opens as soon as it is approved.')) + '</p>' +
-        '<div class="home-actions"><button class="primary" id="h-check">' + esc(T('Check again')) + '</button>' +
-        '<button class="ghost" id="h-change">' + esc(T('Choose another')) + '</button></div>' +
+    if (mobs.length) {
+      info = mobs.map(mobilityCardHtml).join('') +
+        '<div class="card home-info">' +
+        (pendingMobs.length
+          ? '<p class="hint">' + esc(T('The Erasmus office has to confirm an acceptance before that journey (steps, countdown, documents) opens. You can apply to more than one and choose once you hear back.')) + '</p>' +
+            '<div class="home-actions"><button class="primary" id="h-check">' + esc(T('Check again')) + '</button>' +
+            '<button class="ghost" id="h-change">' + esc(T('Apply to another')) + '</button></div>'
+          : '<div class="home-actions"><button class="ghost" id="h-change">' + esc(T('Apply to another')) + '</button></div>') +
         '</div>';
-    } else if (uni) {
+    } else if (focusUni) {
       info = '<div class="card home-info">' +
         '<div class="route">' +
         '<span class="route-city">' + flagImg('RO') + '<b>Timișoara</b></span>' +
         '<span class="route-arrow">' + icon('arrow-right') + '</span>' +
-        '<span class="route-city">' + flagImg(uni.country_code) + '<b>' + esc(uni.city) + '</b></span>' +
+        '<span class="route-city">' + flagImg(focusUni.country_code) + '<b>' + esc(focusUni.city) + '</b></span>' +
         '</div>' +
-        '<p class="hint route-sub">' + esc(uni.name) + ' - ' + esc(T(uni.country)) +
-        (mob ? '<br/>' + esc(fmtDate(mob.start_date)) + ' - ' + esc(fmtDate(mob.end_date)) : '') + '</p>' +
-        (mob
-          ? countdownHtml() + '<button class="link" id="h-browse">' + esc(T('Browse other universities')) + '</button>'
-          : '<div class="home-actions"><button class="primary" id="h-open">' + esc(T('Open this university')) + '</button>' +
-            '<button class="ghost" id="h-change">' + esc(T('Choose another')) + '</button></div>') +
+        '<p class="hint route-sub">' + esc(focusUni.name) + ' - ' + esc(T(focusUni.country)) + '</p>' +
+        '<div class="home-actions"><button class="primary" id="h-open">' + esc(T('Open this university')) + '</button>' +
+        '<button class="ghost" id="h-change">' + esc(T('Choose another')) + '</button></div>' +
         '</div>';
     } else {
       info = '<div class="card home-info">' +
@@ -825,28 +848,36 @@ const App = (() => {
     bind('#h-change', () => go('map'));
     bind('#h-browse', () => go('map'));
     bind('#h-check', () => checkApproval(false));
-    if (mob) startCountdown(wrap);
-    if (pend) startTimer(() => checkApproval(true), 30000);   // approval shows up on its own
+    wrap.querySelectorAll('[data-withdraw]').forEach(btn => {
+      btn.onclick = async () => {
+        btn.disabled = true;
+        try { await Store.withdrawApplication(btn.dataset.withdraw); toast(T('Application withdrawn.')); render(); }
+        catch (e) { toast(errText(e)); btn.disabled = false; }
+      };
+    });
+    if (activeMob) startCountdown(wrap);
+    if (pendingMobs.length) startTimer(() => checkApproval(true), 30000);   // approval shows up on its own
 
-    Stage.homeGlobe(wrap.querySelector('#home-globe'), uni, id => { st.activeUniId = id; go('uni'); });
+    Stage.homeGlobe(wrap.querySelector('#home-globe'), focusUni, id => { st.activeUniId = id; go('uni'); });
     root.appendChild(wrap);
   }
 
-  // Has an admin approved the pending mobility? quiet = background poll (no toast).
+  // Has an admin approved one of the pending mobilities? quiet = background poll (no toast).
   let checking = false;
   async function checkApproval(quiet) {
     if (checking) return;
     checking = true;
+    const before = (Store.state.pendings || []).length;
     try {
       await Store.refresh();
       const st = Store.state;
-      if (st.mode === 'journey' && st.mobility && !st.pending) {
+      if (st.mode === 'journey' && st.mobility && !st.pendings.length) {
         tlOpen = null;
         go('home', { replace: true, force: true });
         await showIntro();
-      } else if (!st.pending) {
+      } else if (st.pendings.length < before) {
         render();
-        if (!quiet) toast(T('Your request was not approved. Check your messages in Profile.'));
+        if (!quiet) toast(T('One of your requests was not approved. Check your messages in Profile.'));
       } else if (!quiet) {
         toast(T('Still waiting for approval'));
       }
@@ -1216,23 +1247,63 @@ const App = (() => {
     return f >= 0.6 ? 'good' : f >= 0.3 ? 'partial' : 'weak';
   }
 
-  // Two dropdowns: language and country.
+  // Filter buttons: hidden by default, each one opens a chip panel of its
+  // own options when pressed (and closes any other open panel).
   function buildFilters(el, onChange) {
     const langs = [...new Set(Store.state.universities.flatMap(u => u.languages || []))].sort();
     const countries = [...new Set(Store.state.universities.map(u => u.country))].sort();
+    const regions = [...new Set(countries.map(regionOf))].sort();
     const f = Store.state.filters;
-    f.region = null; f.quality = null;   // no longer offered - drop any value saved from before
-    const selectOf = (kind, allLabel, options) =>
-      '<div class="select-wrap"><select data-filter="' + kind + '">' +
-      '<option value="">' + esc(allLabel) + '</option>' +
-      options.map(([value, label]) => '<option value="' + esc(value) + '" ' + (f[kind] === value ? 'selected' : '') + '>' + esc(label) + '</option>').join('') +
-      '</select>' + icon('chevron-down', 'sel-ico') + '</div>';
-    el.innerHTML = '<div class="filter-grid">' +
-      selectOf('lang', T('All languages'), langs.map(l => [l, T(l)])) +
-      selectOf('country', T('All countries'), countries.map(c => [c, T(c)])) +
-      '</div>';
-    el.querySelectorAll('select[data-filter]').forEach(sel => {
-      sel.onchange = () => { f[sel.dataset.filter] = sel.value || null; onChange(); };
+    f.quality = null;   // no longer offered - drop any value saved from before
+    const groups = [
+      ['lang', T('Language'), langs.map(l => [l, T(l)])],
+      ['country', T('Country'), countries.map(c => [c, T(c)])],
+      ['region', T('Region'), regions.map(r => [r, T(r)])],
+    ];
+    const current = (kind, label, options) => {
+      const v = f[kind];
+      const hit = v && options.find(([value]) => value === v);
+      return hit ? hit[1] : label;
+    };
+    el.innerHTML =
+      '<div class="filter-row">' +
+      groups.map(([kind, label, options]) =>
+        '<button class="filter-btn' + (f[kind] ? ' on' : '') + '" data-filter-btn="' + kind + '" aria-expanded="false">' +
+        '<span>' + esc(current(kind, label, options)) + '</span>' + icon('chevron-down', 'sm-ico') +
+        '</button>'
+      ).join('') +
+      '</div>' +
+      groups.map(([kind, , options]) =>
+        '<div class="chips filter-options" data-filter-panel="' + kind + '" hidden>' +
+        '<button class="chip' + (!f[kind] ? ' on' : '') + '" data-filter="' + kind + '" data-value="">' + esc(T('All')) + '</button>' +
+        options.map(([value, label]) => '<button class="chip' + (f[kind] === value ? ' on' : '') + '" data-filter="' + kind + '" data-value="' + esc(value) + '">' + esc(label) + '</button>').join('') +
+        '</div>'
+      ).join('');
+    el.querySelectorAll('[data-filter-btn]').forEach(btn => {
+      btn.onclick = () => {
+        const kind = btn.dataset.filterBtn;
+        const panel = el.querySelector('[data-filter-panel="' + kind + '"]');
+        const willOpen = panel.hidden;
+        el.querySelectorAll('[data-filter-panel]').forEach(p => { p.hidden = true; });
+        el.querySelectorAll('[data-filter-btn]').forEach(b => b.setAttribute('aria-expanded', 'false'));
+        panel.hidden = !willOpen;
+        btn.setAttribute('aria-expanded', String(willOpen));
+      };
+    });
+    el.querySelectorAll('[data-filter]').forEach(chip => {
+      chip.onclick = () => {
+        const kind = chip.dataset.filter;
+        const value = chip.dataset.value || null;
+        f[kind] = value;
+        const panel = el.querySelector('[data-filter-panel="' + kind + '"]');
+        panel.querySelectorAll('[data-filter]').forEach(c => c.classList.toggle('on', (c.dataset.value || null) === value));
+        panel.hidden = true;
+        const btn = el.querySelector('[data-filter-btn="' + kind + '"]');
+        btn.setAttribute('aria-expanded', 'false');
+        btn.classList.toggle('on', !!value);
+        btn.querySelector('span').textContent = value ? chip.textContent : groups.find(g => g[0] === kind)[1];
+        onChange();
+      };
     });
   }
 

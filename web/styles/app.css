@@ -591,10 +591,28 @@ body.no-scroll { overflow: hidden; }
 .chip:hover { color: var(--text); }
 .chip.on { color: var(--accent-live); background: var(--accent-soft); border-color: var(--accent-line); }
 
-/* map filters: a few short dropdowns instead of a long row of chips */
-.filter-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 14px; }
-.filter-grid select { min-height: 42px; padding: 0 36px 0 12px; font-size: 13.5px; }
-.filter-grid .sel-ico { width: 16px; height: 16px; }
+/* map filters: a row of toggle buttons; each opens its own chip panel below
+   the row on tap, and the panel stays hidden otherwise. */
+.filter-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+.filter-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text-2);
+  font: 600 13px/1 var(--font);
+  white-space: nowrap;
+  transition: color .15s, border-color .15s, background .15s;
+}
+.filter-btn .sm-ico { transition: transform .15s; }
+.filter-btn[aria-expanded="true"] .sm-ico { transform: rotate(180deg); }
+.filter-btn.on { color: var(--accent-live); background: var(--accent-soft); border-color: var(--accent-line); }
+.filter-options { margin-bottom: 14px; }
+.filter-options[hidden] { display: none; }
 
 /* ---------------------------------------------------- pills, badges, due */
 .pill, .due {

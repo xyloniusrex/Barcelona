@@ -93,79 +93,115 @@ PARTNER_COURSES = [
 
 # ============================================================================
 # TEMPORARY FICTIONAL DEMO DATA - not real institutions, not real partnerships.
-# Added to stress-test the map/filters/favorites UI with more than a handful
-# of entries while the real partner list is still short. To remove: delete
-# this block (TEMP_UNIVERSITIES / TEMP_PARTNER_COURSES / TEMP_MATCHES) and
-# drop the three "+ TEMP_..." lines inside seed() below.
+# Generated (not hand-written) across many countries/regions/languages/match
+# qualities so the map's filters have enough real variety to exercise, while
+# the real partner list above stays short and honest. To remove: delete this
+# whole block and the three "+ TEMP_..." references inside seed() below.
 # ============================================================================
-TEMP_UNIVERSITIES = [
-    {"id": "demo-fr", "name": "Institut Supérieur de Technologie de Lenoir (fictional - demo only)", "city": "Lenoir-sur-Seine", "country": "France", "country_code": "FR", "lat": 47.30, "lng": 0.90, "languages": ["French", "English"], "website": "https://example.com/demo-fr", "greeting": "Bon voyage !"},
-    {"id": "demo-it", "name": "Accademia di Scienze Applicate di Serrano (fictional - demo only)", "city": "Serrano Marittima", "country": "Italy", "country_code": "IT", "lat": 43.70, "lng": 11.00, "languages": ["Italian", "English"], "website": "https://example.com/demo-it", "greeting": "Buon viaggio!"},
-    {"id": "demo-pl", "name": "Politechnika Wiślana (fictional - demo only)", "city": "Nowogard Wschodni", "country": "Poland", "country_code": "PL", "lat": 51.90, "lng": 19.10, "languages": ["Polish", "English"], "website": "https://example.com/demo-pl", "greeting": "Szerokiej drogi!"},
-    {"id": "demo-se", "name": "Nordvik University of Applied Sciences (fictional - demo only)", "city": "Nordvik", "country": "Sweden", "country_code": "SE", "lat": 55.70, "lng": 13.20, "languages": ["Swedish", "English"], "website": "https://example.com/demo-se", "greeting": "Trevlig resa!"},
-]
+import hashlib as _hashlib
 
-TEMP_PARTNER_COURSES = [
-    # Lenoir (fictional)
-    {"id": "dfr-ai", "university_id": "demo-fr", "name": "Intelligence Artificielle", "ects": 6, "semester": 2, "language": "French", "description": "Demo course: search, machine learning, neural networks."},
-    {"id": "dfr-os", "university_id": "demo-fr", "name": "Systèmes d'Exploitation", "ects": 5, "semester": 2, "language": "French", "description": "Demo course: processes, scheduling, memory management."},
-    {"id": "dfr-net", "university_id": "demo-fr", "name": "Réseaux Informatiques", "ects": 5, "semester": 2, "language": "English", "description": "Demo course: TCP/IP, routing, sockets."},
-    {"id": "dfr-comp", "university_id": "demo-fr", "name": "Compilation", "ects": 6, "semester": 2, "language": "French", "description": "Demo course: parsing, code generation."},
-    {"id": "dfr-db", "university_id": "demo-fr", "name": "Bases de Données", "ects": 4, "semester": 2, "language": "English", "description": "Demo course: SQL, transactions, normalization."},
-    {"id": "dfr-se", "university_id": "demo-fr", "name": "Génie Logiciel", "ects": 4, "semester": 2, "language": "English", "description": "Demo course: agile methods, testing, design patterns."},
-    # Serrano (fictional)
-    {"id": "dit-ai", "university_id": "demo-it", "name": "Intelligenza Artificiale", "ects": 6, "semester": 2, "language": "Italian", "description": "Demo course: search, machine learning, ethics."},
-    {"id": "dit-os", "university_id": "demo-it", "name": "Sistemi Operativi", "ects": 5, "semester": 2, "language": "English", "description": "Demo course: processes, threads, file systems."},
-    {"id": "dit-net", "university_id": "demo-it", "name": "Reti di Calcolatori", "ects": 5, "semester": 2, "language": "English", "description": "Demo course: TCP/IP, HTTP, network security."},
-    {"id": "dit-comp", "university_id": "demo-it", "name": "Compilatori", "ects": 6, "semester": 2, "language": "Italian", "description": "Demo course: lexical analysis, semantic analysis."},
-    {"id": "dit-db", "university_id": "demo-it", "name": "Basi di Dati", "ects": 4, "semester": 2, "language": "English", "description": "Demo course: SQL, indexing, normalization."},
-    {"id": "dit-se", "university_id": "demo-it", "name": "Ingegneria del Software", "ects": 4, "semester": 2, "language": "English", "description": "Demo course: version control, testing, design patterns."},
-    # Nowogard (fictional)
-    {"id": "dpl-ai", "university_id": "demo-pl", "name": "Sztuczna Inteligencja", "ects": 6, "semester": 2, "language": "English", "description": "Demo course: constraint satisfaction, neural networks."},
-    {"id": "dpl-os", "university_id": "demo-pl", "name": "Systemy Operacyjne", "ects": 5, "semester": 2, "language": "Polish", "description": "Demo course: scheduling, memory management."},
-    {"id": "dpl-net", "university_id": "demo-pl", "name": "Sieci Komputerowe", "ects": 5, "semester": 2, "language": "English", "description": "Demo course: routing, sockets, network security."},
-    {"id": "dpl-comp", "university_id": "demo-pl", "name": "Kompilatory", "ects": 6, "semester": 2, "language": "Polish", "description": "Demo course: parsing, code generation."},
-    {"id": "dpl-db", "university_id": "demo-pl", "name": "Bazy Danych", "ects": 4, "semester": 2, "language": "English", "description": "Demo course: transactions, indexing."},
-    {"id": "dpl-se", "university_id": "demo-pl", "name": "Inżynieria Oprogramowania", "ects": 4, "semester": 2, "language": "English", "description": "Demo course: agile methods, testing."},
-    # Nordvik (fictional)
-    {"id": "dse-ai", "university_id": "demo-se", "name": "Artificial Intelligence", "ects": 6, "semester": 2, "language": "English", "description": "Demo course: search, machine learning, ethics."},
-    {"id": "dse-os", "university_id": "demo-se", "name": "Operating Systems", "ects": 5, "semester": 2, "language": "English", "description": "Demo course: processes, scheduling, file systems."},
-    {"id": "dse-net", "university_id": "demo-se", "name": "Computer Networks", "ects": 5, "semester": 2, "language": "English", "description": "Demo course: TCP/IP, routing, network security."},
-    {"id": "dse-comp", "university_id": "demo-se", "name": "Compiler Construction", "ects": 6, "semester": 2, "language": "English", "description": "Demo course: lexical analysis, code generation."},
-    {"id": "dse-db", "university_id": "demo-se", "name": "Databases", "ects": 4, "semester": 2, "language": "English", "description": "Demo course: SQL, transactions, indexing."},
-    {"id": "dse-se", "university_id": "demo-se", "name": "Software Engineering", "ects": 4, "semester": 2, "language": "English", "description": "Demo course: testing, design patterns, version control."},
+# (country, ISO 3166-1 alpha-2, approx lat, approx lng, primary language)
+# Kept disjoint from the real partners' countries above, so the demo spread
+# covers new ground on the globe instead of piling dots on the same spots.
+_DEMO_COUNTRIES = [
+    ("France", "FR", 47.0, 2.3, "French"),
+    ("Italy", "IT", 43.5, 11.9, "Italian"),
+    ("Spain", "ES", 40.2, -3.6, "Spanish"),
+    ("Greece", "GR", 38.2, 23.7, "Greek"),
+    ("Poland", "PL", 52.0, 19.3, "Polish"),
+    ("Czechia", "CZ", 49.9, 15.4, "Czech"),
+    ("Slovakia", "SK", 48.8, 19.5, "Slovak"),
+    ("Slovenia", "SI", 46.1, 14.9, "Slovenian"),
+    ("Croatia", "HR", 45.3, 16.3, "Croatian"),
+    ("Serbia", "RS", 44.2, 20.8, "Serbian"),
+    ("Bulgaria", "BG", 42.8, 25.3, "Bulgarian"),
+    ("Sweden", "SE", 59.2, 15.0, "Swedish"),
+    ("Norway", "NO", 60.8, 8.5, "Norwegian"),
+    ("Denmark", "DK", 56.1, 10.2, "Danish"),
+    ("Ireland", "IE", 53.3, -7.8, "Irish"),
+    ("Lithuania", "LT", 55.3, 23.9, "Lithuanian"),
+    ("Estonia", "EE", 58.7, 25.1, "Estonian"),
+    ("United Kingdom", "GB", 54.0, -2.0, "English"),
+    ("Switzerland", "CH", 46.8, 8.2, "German"),
+    ("Iceland", "IS", 64.9, -19.0, "Icelandic"),
+    ("Malta", "MT", 35.9, 14.4, "Maltese"),
+    ("Cyprus", "CY", 35.1, 33.4, "Greek"),
+    ("Luxembourg", "LU", 49.8, 6.1, "French"),
+    ("Turkey", "TR", 38.9, 35.2, "Turkish"),
+    ("Montenegro", "ME", 42.7, 19.3, "Montenegrin"),
+    ("North Macedonia", "MK", 41.6, 21.7, "Macedonian"),
+    ("Albania", "AL", 41.0, 20.0, "Albanian"),
+    ("Bosnia and Herzegovina", "BA", 43.9, 17.7, "Bosnian"),
 ]
+_DEMO_NAME_PATTERNS = [
+    "Institute of Applied Sciences", "Polytechnic University",
+    "University of Technology", "School of Engineering and Informatics",
+    "Institute of Information Technology", "College of Engineering",
+    "University of Applied Sciences", "National Technical University",
+    "Institute for Digital Innovation",
+]
+_DEMO_CITY_PREFIXES = ["North", "East", "West", "South", "New", "Upper", "Lower", "Great", "Little", "Old", "Fair"]
+_DEMO_CITY_ROOTS = ["brook", "field", "haven", "ford", "mont", "vale", "wick", "burg", "dale", "bridge", "holm", "stead", "gate", "cross"]
 
-TEMP_MATCHES = [
-    # Lenoir (fictional) - deliberately high-match demo entry
-    {"university_id": "demo-fr", "home_course_id": "ac-ai", "partner_course_id": "dfr-ai", "label": "good", "explanation": "Demo match: full overlap."},
-    {"university_id": "demo-fr", "home_course_id": "ac-os", "partner_course_id": "dfr-os", "label": "good", "explanation": "Demo match: full overlap."},
-    {"university_id": "demo-fr", "home_course_id": "ac-net", "partner_course_id": "dfr-net", "label": "good", "explanation": "Demo match: full overlap."},
-    {"university_id": "demo-fr", "home_course_id": "ac-comp", "partner_course_id": "dfr-comp", "label": "partial", "explanation": "Demo match: parsing covered, code generation lighter.", "missing_topics": ["code generation"]},
-    {"university_id": "demo-fr", "home_course_id": "ac-db", "partner_course_id": "dfr-db", "label": "good", "explanation": "Demo match: full overlap."},
-    {"university_id": "demo-fr", "home_course_id": "ac-se", "partner_course_id": "dfr-se", "label": "good", "explanation": "Demo match: full overlap."},
-    # Serrano (fictional) - deliberately mixed-match demo entry
-    {"university_id": "demo-it", "home_course_id": "ac-ai", "partner_course_id": "dit-ai", "label": "good", "explanation": "Demo match: full overlap."},
-    {"university_id": "demo-it", "home_course_id": "ac-os", "partner_course_id": "dit-os", "label": "partial", "explanation": "Demo match: processes and threads covered, file systems lighter.", "missing_topics": ["file systems"]},
-    {"university_id": "demo-it", "home_course_id": "ac-net", "partner_course_id": "dit-net", "label": "good", "explanation": "Demo match: full overlap."},
-    {"university_id": "demo-it", "home_course_id": "ac-comp", "partner_course_id": None, "label": "none", "explanation": "Demo match: no compiler course this semester.", "missing_topics": ["lexical analysis", "parsing", "code generation"]},
-    {"university_id": "demo-it", "home_course_id": "ac-db", "partner_course_id": "dit-db", "label": "good", "explanation": "Demo match: full overlap."},
-    {"university_id": "demo-it", "home_course_id": "ac-se", "partner_course_id": "dit-se", "label": "partial", "explanation": "Demo match: version control and testing covered, patterns lighter.", "missing_topics": ["design patterns"]},
-    # Nowogard (fictional) - deliberately low-match demo entry
-    {"university_id": "demo-pl", "home_course_id": "ac-ai", "partner_course_id": "dpl-ai", "label": "partial", "explanation": "Demo match: neural networks covered, search and CSP missing.", "missing_topics": ["search", "constraint satisfaction"]},
-    {"university_id": "demo-pl", "home_course_id": "ac-os", "partner_course_id": None, "label": "none", "explanation": "Demo match: no operating systems course this semester.", "missing_topics": ["processes", "scheduling", "memory management"]},
-    {"university_id": "demo-pl", "home_course_id": "ac-net", "partner_course_id": "dpl-net", "label": "partial", "explanation": "Demo match: routing covered, sockets missing.", "missing_topics": ["sockets"]},
-    {"university_id": "demo-pl", "home_course_id": "ac-comp", "partner_course_id": None, "label": "none", "explanation": "Demo match: no compiler course this semester.", "missing_topics": ["lexical analysis", "parsing", "code generation"]},
-    {"university_id": "demo-pl", "home_course_id": "ac-db", "partner_course_id": "dpl-db", "label": "partial", "explanation": "Demo match: transactions covered, indexing lighter.", "missing_topics": ["indexing"]},
-    {"university_id": "demo-pl", "home_course_id": "ac-se", "partner_course_id": None, "label": "none", "explanation": "Demo match: no software engineering course this semester.", "missing_topics": ["agile methods", "testing", "design patterns", "version control"]},
-    # Nordvik (fictional) - deliberately high-match demo entry
-    {"university_id": "demo-se", "home_course_id": "ac-ai", "partner_course_id": "dse-ai", "label": "good", "explanation": "Demo match: full overlap."},
-    {"university_id": "demo-se", "home_course_id": "ac-os", "partner_course_id": "dse-os", "label": "good", "explanation": "Demo match: full overlap."},
-    {"university_id": "demo-se", "home_course_id": "ac-net", "partner_course_id": "dse-net", "label": "good", "explanation": "Demo match: full overlap."},
-    {"university_id": "demo-se", "home_course_id": "ac-comp", "partner_course_id": "dse-comp", "label": "good", "explanation": "Demo match: full overlap."},
-    {"university_id": "demo-se", "home_course_id": "ac-db", "partner_course_id": "dse-db", "label": "good", "explanation": "Demo match: full overlap."},
-    {"university_id": "demo-se", "home_course_id": "ac-se", "partner_course_id": "dse-se", "label": "good", "explanation": "Demo match: full overlap."},
-]
+
+def _demo_pick(seq, *salt):
+    digest = _hashlib.md5("-".join(str(s) for s in salt).encode()).hexdigest()
+    return seq[int(digest, 16) % len(seq)]
+
+
+def _generate_fictional_universities(count=168):
+    """Deterministic (same output every run, nothing random) so the demo
+    data does not shuffle around between server restarts.
+
+    The map's "match quality" filter buckets a university by the FRACTION of
+    its courses that have any partner at all (label != "none"), not by the
+    per-course label - so to get a real good/partial/weak spread (instead of
+    nearly everything landing in "good" by chance), the number of "none"
+    courses per university is chosen to hit a target tier on purpose."""
+    unis, courses, matches = [], [], []
+    tier_cycle = ["good", "good", "partial", "weak"]  # ~50% good, 25% partial, 25% weak
+    none_counts_for_tier = {"good": [0, 1], "partial": [3, 4], "weak": [5, 6]}
+    sublabel_cycle = ["good", "partial"]  # cosmetic split for courses that do have a partner
+    for i in range(count):
+        country, code, lat0, lng0, lang = _DEMO_COUNTRIES[i % len(_DEMO_COUNTRIES)]
+        uid = f"demo-{code.lower()}-{i + 1}"
+        ring = i // len(_DEMO_COUNTRIES)  # spreads repeats of a country apart on the map
+        lat = round(lat0 + ((i % 3) - 1) * 0.5 + ring * 0.7, 2)
+        lng = round(lng0 + ((i % 5) - 2) * 0.6, 2)
+        city = _demo_pick(_DEMO_CITY_PREFIXES, uid, "prefix") + " " + _demo_pick(_DEMO_CITY_ROOTS, uid, "root").capitalize()
+        name = f"{city} {_demo_pick(_DEMO_NAME_PATTERNS, uid, 'name')} (fictional - demo only)"
+        unis.append({
+            "id": uid, "name": name, "city": city, "country": country, "country_code": code,
+            "lat": lat, "lng": lng, "languages": [lang] if lang == "English" else [lang, "English"],
+            "website": f"https://example.com/{uid}", "greeting": "Safe travels!",
+        })
+
+        target_tier = tier_cycle[i % len(tier_cycle)]
+        none_n = _demo_pick(none_counts_for_tier[target_tier], uid, "nonecount")
+        ordered = sorted(HOME_COURSES, key=lambda hc: _hashlib.md5(f"{uid}-{hc['id']}".encode()).hexdigest())
+        none_ids = {hc["id"] for hc in ordered[:none_n]}
+
+        for hc in HOME_COURSES:
+            label = "none" if hc["id"] in none_ids else _demo_pick(sublabel_cycle, uid, hc["id"])
+            pcid = f"{uid}-{hc['id']}"
+            if label != "none":
+                courses.append({
+                    "id": pcid, "university_id": uid, "name": f"{hc['name']} (Demo)",
+                    "ects": hc["ects"], "semester": 2, "language": lang if i % 2 == 0 else "English",
+                    "description": f"Fictional demo course standing in for {hc['name']}.",
+                })
+            missing = [] if label == "good" else (hc["topics"][:2] if label == "partial" else hc["topics"])
+            matches.append({
+                "university_id": uid, "home_course_id": hc["id"],
+                "partner_course_id": pcid if label != "none" else None,
+                "label": label,
+                "explanation": "Fictional demo match - filler data, not a real course comparison.",
+                "missing_topics": missing,
+            })
+    return unis, courses, matches
+
+
+TEMP_UNIVERSITIES, TEMP_PARTNER_COURSES, TEMP_MATCHES = _generate_fictional_universities()
 # ========================================================== end temporary block
 
 MATCHES = [
