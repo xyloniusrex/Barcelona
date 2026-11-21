@@ -138,12 +138,34 @@ const Stage = (() => {
     return f >= 0.6 ? 'good' : f >= 0.3 ? 'partial' : 'weak';
   }
 
+  // Mirrors app.js's REGIONS table so the globe highlights the same universities
+  // the list below it shows when the region filter is active.
+  const REGIONS = {
+    'United Kingdom': 'Northern Europe', 'Ireland': 'Northern Europe', 'Denmark': 'Northern Europe',
+    'Sweden': 'Northern Europe', 'Norway': 'Northern Europe', 'Finland': 'Northern Europe',
+    'Iceland': 'Northern Europe', 'Estonia': 'Northern Europe', 'Latvia': 'Northern Europe', 'Lithuania': 'Northern Europe',
+    'Belgium': 'Western Europe', 'France': 'Western Europe', 'Germany': 'Western Europe',
+    'Netherlands': 'Western Europe', 'Luxembourg': 'Western Europe', 'Switzerland': 'Western Europe',
+    'Portugal': 'Southern Europe', 'Spain': 'Southern Europe', 'Italy': 'Southern Europe',
+    'Greece': 'Southern Europe', 'Malta': 'Southern Europe', 'Cyprus': 'Southern Europe',
+    'Austria': 'Central Europe', 'Poland': 'Central Europe', 'Czechia': 'Central Europe',
+    'Czech Republic': 'Central Europe', 'Slovakia': 'Central Europe', 'Hungary': 'Central Europe', 'Slovenia': 'Central Europe',
+    'Romania': 'Eastern Europe', 'Bulgaria': 'Eastern Europe', 'Moldova': 'Eastern Europe',
+    'Ukraine': 'Eastern Europe', 'Belarus': 'Eastern Europe',
+    'Croatia': 'Southeastern Europe', 'Serbia': 'Southeastern Europe', 'Albania': 'Southeastern Europe',
+    'North Macedonia': 'Southeastern Europe', 'Montenegro': 'Southeastern Europe',
+    'Bosnia and Herzegovina': 'Southeastern Europe', 'Kosovo': 'Southeastern Europe',
+  };
+  const regionOf = country => REGIONS[country] || 'Other';
+
   function visibleUnis() {
-    const { lang, country } = Store.state.filters || {};
+    const { lang, country, region, quality } = Store.state.filters || {};
     return Store.sortedUnis().filter(u =>
       typeof u.lat === 'number' && typeof u.lng === 'number' &&
       (!lang || (u.languages || []).includes(lang)) &&
-      (!country || u.country === country));
+      (!country || u.country === country) &&
+      (!region || regionOf(u.country) === region) &&
+      (!quality || tier(u) === quality));
   }
 
   function partnerPoints(unis, labelFirst) {

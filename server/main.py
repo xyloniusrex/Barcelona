@@ -17,10 +17,11 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
 
 from server import auth as authmod
+from server import ical as icalmod
 from server import jobs as jobsmod
 from server import logs as logsmod
 from server import seed as seedmod
@@ -537,6 +538,28 @@ def deadlines():
     """Project paperwork deadlines (static seed data, client caches it)."""
     return {"deadlines": seedmod.PROJECT_DEADLINES}
 
+
+@app.get("/api/calendar/{user_id}.ics")
+def calendar_ics(user_id: str):
+    """Exports the active mobility period, tasks and project deadlines as a
+    single .ics feed - importable (or subscribable, via "from URL") in Google
+    Calendar, Outlook or Apple Calendar."""
+    with db() as conn:
+        user = _get_user(conn, user_id)
+        mob_row = conn.execute(
+            "SELECT * FROM mobilities WHERE user_id = ? AND status = 'active' ORDER BY created_at DESC", (user_id,)
+        ).fetchone()
+        mobility = None
+        tasks = []
+        if mob_row:
+            mobility = dict(mob_row)
+            uni = conn.execute("SELECT name FROM universities WHERE id = ?", (mobility["university_id"],)).fetchone()
+            mobility["university_name"] = uni["name"] if uni else None
+            tasks = [dict(r) for r in conn.execute("SELECT * FROM tasks WHERE mobility_id = ?", (mobility["id"],))]
+    deadlines_list = icalmod.project_deadlines(dict(user), mobility)
+    body = icalmod.build_feed(mobility, tasks, deadlines_list)
+    return Response(content=body, media_type="text/calendar; charset=utf-8",
+                     headers={"Content-Disposition": 'inline; filename="poligo.ics"'})
 
 
 def _require_admin(request: Request):

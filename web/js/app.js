@@ -17,7 +17,6 @@ const App = (() => {
     explore: [
       ['map', 'Map'],
       ['universities', 'Universities'],
-      ['shortlist', 'Shortlist'],
     ],
     journey: [
       ['today', 'Today'],
@@ -26,7 +25,7 @@ const App = (() => {
     ],
   };
   const NAV_ICONS = {
-    map: 'map', universities: 'landmark', shortlist: 'bookmark',
+    map: 'map', universities: 'landmark',
     today: 'sun', plan: 'calendar-days', docs: 'file-text',
   };
   // [screen, label, icon, one-line description] - the tiles on Home
@@ -34,7 +33,7 @@ const App = (() => {
     explore: [
       ['map', 'Map', 'map', 'Partner universities on the globe'],
       ['universities', 'Universities', 'landmark', 'Compare how many subjects match'],
-      ['shortlist', 'Shortlist', 'bookmark', 'Your top 3, in order'],
+      ['shortlist', 'Favorite', 'bookmark', 'Your top 3, in order'],
       ['subjects', 'My subjects', 'check', 'Choose what to match'],
       ['profile', 'Profile', 'user', 'Account and settings'],
     ],
@@ -50,7 +49,7 @@ const App = (() => {
   const KNOWN = new Set(['landing', 'auth', 'onboarding', 'uni', 'subjects', 'scanJ', 'admin', 'home', 'profile', 'map',
     'universities', 'shortlist', 'today', 'plan', 'docs']);
   // old screen names (links, saved state, the terminal) -> where they live now
-  const ALIAS = { calendar: 'plan', timeline: 'plan', docsSetup: 'docs' };
+  const ALIAS = { calendar: 'plan', timeline: 'plan', docsSetup: 'docs', shortlist: 'map' };
   const STAGES = ['before', 'arrival', 'during', 'before-return', 'after-return'];
   const STAGE_LABELS = {
     before: 'Before departure', arrival: 'Arrival (first 2 weeks)', during: 'During',
@@ -67,6 +66,25 @@ const App = (() => {
   const WDAYS = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
   const LANGS = [['en', 'English'], ['ro', 'Română']];
   const STUDENT_DOMAIN = '@student.upt.ro';
+  const KNOWN_LANGUAGES = ['English', 'Romanian', 'French', 'German', 'Spanish', 'Portuguese', 'Italian', 'Dutch', 'Finnish', 'Hungarian', 'Latvian', 'Polish'];
+  // country -> macro-region: groups destinations in setup and feeds the map's region filter
+  const REGIONS = {
+    'United Kingdom': 'Northern Europe', 'Ireland': 'Northern Europe', 'Denmark': 'Northern Europe',
+    'Sweden': 'Northern Europe', 'Norway': 'Northern Europe', 'Finland': 'Northern Europe',
+    'Iceland': 'Northern Europe', 'Estonia': 'Northern Europe', 'Latvia': 'Northern Europe', 'Lithuania': 'Northern Europe',
+    'Belgium': 'Western Europe', 'France': 'Western Europe', 'Germany': 'Western Europe',
+    'Netherlands': 'Western Europe', 'Luxembourg': 'Western Europe', 'Switzerland': 'Western Europe',
+    'Portugal': 'Southern Europe', 'Spain': 'Southern Europe', 'Italy': 'Southern Europe',
+    'Greece': 'Southern Europe', 'Malta': 'Southern Europe', 'Cyprus': 'Southern Europe',
+    'Austria': 'Central Europe', 'Poland': 'Central Europe', 'Czechia': 'Central Europe',
+    'Czech Republic': 'Central Europe', 'Slovakia': 'Central Europe', 'Hungary': 'Central Europe', 'Slovenia': 'Central Europe',
+    'Romania': 'Eastern Europe', 'Bulgaria': 'Eastern Europe', 'Moldova': 'Eastern Europe',
+    'Ukraine': 'Eastern Europe', 'Belarus': 'Eastern Europe',
+    'Croatia': 'Southeastern Europe', 'Serbia': 'Southeastern Europe', 'Albania': 'Southeastern Europe',
+    'North Macedonia': 'Southeastern Europe', 'Montenegro': 'Southeastern Europe',
+    'Bosnia and Herzegovina': 'Southeastern Europe', 'Kosovo': 'Southeastern Europe',
+  };
+  const regionOf = country => REGIONS[country] || 'Other';
 
   const history = [];
   const timers = [];
@@ -328,6 +346,10 @@ const App = (() => {
 
   function go(screen, opts) {
     opts = opts || {};
+    if (screen === 'shortlist') {
+      Store.state.mapTab = 'favorite'; // moved under Map as a sub-tab
+      if (Store.state.screen === 'map') { Store.saveLocal(); render(); syncHash('map'); return; }
+    }
     screen = ALIAS[screen] || screen;
     const cur = Store.state.screen;
     if (screen === cur && !opts.force) { syncHash(screen); return; }
@@ -357,6 +379,7 @@ const App = (() => {
   window.addEventListener('hashchange', () => {
     if (hashLock) return;
     const raw = (location.hash || '').replace(/^#/, '') || 'landing';
+    if (raw === 'shortlist') Store.state.mapTab = 'favorite';
     const s = ALIAS[raw] || raw;
     if (!KNOWN.has(s) || s === Store.state.screen) return;
     if (s === 'landing' && Store.state.seenLanding) return;
@@ -407,15 +430,26 @@ const App = (() => {
     });
   }
 
+  // Even while on a journey, you can still be on an explore screen (browsing
+  // other opportunities) - the nav should match the screen you are actually
+  // on, not just the account-level mode.
+  function navGroupFor(screen, mode) {
+    if (NAVS.explore.some(n => n[0] === screen)) return 'explore';
+    if (NAVS.journey.some(n => n[0] === screen)) return 'journey';
+    return mode;
+  }
+
   function renderNav() {
     const { mode, screen } = Store.state;
     if (!NAV_SCREENS.has(screen)) { $nav.hidden = true; return; }
     $nav.hidden = false;
     $nav.innerHTML = '';
-    const cd = mode === 'journey' ? navCountdownText() : '';
-    for (const [id, label] of NAVS[mode]) {
+    const group = navGroupFor(screen, mode);
+    const cd = group === 'journey' ? navCountdownText() : '';
+    for (const [id, label] of NAVS[group]) {
       const badge = id === 'today' && cd ? '<span class="nav-cd" data-nav-cd>' + esc(cd) + '</span>' : '';
-      const b = h('<button class="' + (screen === id ? 'active' : '') + '"><span class="ico">' + icon(NAV_ICONS[id]) + badge + '</span><span>' + esc(T(label)) + '</span></button>');
+      const dot = id === 'plan' && hasOverdueTasks() ? '<span class="nav-dot"></span>' : '';
+      const b = h('<button class="' + (screen === id ? 'active' : '') + '"><span class="ico">' + icon(NAV_ICONS[id]) + badge + dot + '</span><span>' + esc(T(label)) + '</span></button>');
       b.onclick = () => go(id);
       $nav.appendChild(b);
     }
@@ -449,7 +483,7 @@ const App = (() => {
         landing: viewLanding, auth: viewAuth, onboarding: viewOnboarding,
         home: viewHome, profile: viewProfile, subjects: viewSubjects,
         map: viewMap, universities: viewUniversities, uni: viewUniversity,
-        shortlist: viewShortlist, today: viewToday, plan: viewPlan,
+        today: viewToday, plan: viewPlan,
         scanJ: viewScan, docs: viewDocs, admin: viewAdmin,
       };
       $app.innerHTML = '';
@@ -610,11 +644,12 @@ const App = (() => {
   }
 
   function viewOnboarding(root) {
-    const draft = Store.state.onbDraft || (Store.state.onbDraft = { projects: [], duration: DURATIONS[0], places: [] });
+    const draft = Store.state.onbDraft || (Store.state.onbDraft = { projects: [], knownLanguages: [], duration: DURATIONS[0], places: [] });
+    if (!Array.isArray(draft.knownLanguages)) draft.knownLanguages = [];
     let step = 0;
     const wrap = h('<div class="screen panel">' +
       '<div class="card">' +
-      '<div class="steps" id="ob-bar"><i></i><i></i><i></i></div>' +
+      '<div class="steps" id="ob-bar"><i></i><i></i><i></i><i></i></div>' +
       '<p class="section-label" id="ob-step"></p>' +
       '<div id="ob-body"></div>' +
       '<button class="ghost" id="ob-back">' + esc(T('Back')) + '</button>' +
@@ -642,6 +677,32 @@ const App = (() => {
         collect() { draft.projects = [...bodyEl.querySelectorAll('.opt.on')].map(o => o.dataset.val); },
       },
       {
+        label: 'Known languages',
+        draw() {
+          bodyEl.innerHTML = '<p class="hint">' + esc(T('Which languages do you already know? Add as many as you like.')) + '</p>' +
+            '<div class="form-field"><div class="select-wrap"><select id="lang-pick">' +
+            KNOWN_LANGUAGES.map(l => '<option value="' + esc(l) + '">' + esc(T(l)) + '</option>').join('') +
+            '</select>' + icon('chevron-down', 'sel-ico') + '</div></div>' +
+            '<button class="ghost" id="lang-add">' + esc(T('Add')) + '</button>' +
+            '<div class="chips" id="lang-chips" style="margin-top:12px"></div>';
+          const chipsEl = bodyEl.querySelector('#lang-chips');
+          const drawChips = () => {
+            chipsEl.innerHTML = draft.knownLanguages.map(l =>
+              '<button class="chip on" data-lang="' + esc(l) + '">' + esc(T(l)) + ' ' + icon('x', 'sm-ico') + '</button>').join('');
+            chipsEl.querySelectorAll('[data-lang]').forEach(c => {
+              c.onclick = () => { draft.knownLanguages = draft.knownLanguages.filter(x => x !== c.dataset.lang); drawChips(); };
+            });
+          };
+          bodyEl.querySelector('#lang-add').onclick = () => {
+            const v = bodyEl.querySelector('#lang-pick').value;
+            if (v && draft.knownLanguages.indexOf(v) === -1) draft.knownLanguages.push(v);
+            drawChips();
+          };
+          drawChips();
+        },
+        collect() {},
+      },
+      {
         label: 'Length',
         draw() {
           bodyEl.innerHTML = '<p class="hint">' + esc(T('How long do you want to go?')) + '</p>' +
@@ -658,8 +719,13 @@ const App = (() => {
         draw() {
           const countries = [...new Set(Store.state.universities.map(u => u.country))].sort();
           const list = countries.length ? countries : ['Portugal', 'Spain', 'Italy', 'Germany', 'France'];
+          const groups = {};
+          for (const c of list) (groups[regionOf(c)] = groups[regionOf(c)] || []).push(c);
           bodyEl.innerHTML = '<p class="hint">' + esc(T('Preferred destinations, used to rank deadlines and matches. Leave empty for everything.')) + '</p>' +
-            '<div class="opt-list">' + list.map(c => optRow(c, T(c), true, draft.places.indexOf(c) !== -1)).join('') + '</div>';
+            Object.keys(groups).sort().map(region =>
+              '<p class="section-label" style="margin-top:14px">' + esc(T(region)) + '</p>' +
+              '<div class="opt-list">' + groups[region].map(c => optRow(c, T(c), true, draft.places.indexOf(c) !== -1)).join('') + '</div>'
+            ).join('');
           wireOptions(bodyEl);
         },
         collect() { draft.places = [...bodyEl.querySelectorAll('.opt.on')].map(o => o.dataset.val); },
@@ -735,7 +801,7 @@ const App = (() => {
         '<p class="hint route-sub">' + esc(uni.name) + ' - ' + esc(T(uni.country)) +
         (mob ? '<br/>' + esc(fmtDate(mob.start_date)) + ' - ' + esc(fmtDate(mob.end_date)) : '') + '</p>' +
         (mob
-          ? countdownHtml()
+          ? countdownHtml() + '<button class="link" id="h-browse">' + esc(T('Browse other universities')) + '</button>'
           : '<div class="home-actions"><button class="primary" id="h-open">' + esc(T('Open this university')) + '</button>' +
             '<button class="ghost" id="h-change">' + esc(T('Choose another')) + '</button></div>') +
         '</div>';
@@ -762,6 +828,7 @@ const App = (() => {
     bind('#h-map', () => go('map'));
     bind('#h-open', () => go('uni'));
     bind('#h-change', () => go('map'));
+    bind('#h-browse', () => go('map'));
     bind('#h-check', () => checkApproval(false));
     if (mob) startCountdown(wrap);
     if (pend) startTimer(() => checkApproval(true), 30000);   // approval shows up on its own
@@ -968,6 +1035,7 @@ const App = (() => {
     const bits = [];
     if (onb.projects && onb.projects.length) bits.push(onb.projects.map(T).join(' / '));
     if (onb.duration) bits.push(T(onb.duration));
+    if (onb.knownLanguages && onb.knownLanguages.length) bits.push(onb.knownLanguages.map(T).join(', '));
     if (onb.places && onb.places.length) bits.push(onb.places.map(T).join(', '));
     return bits.join(' - ');
   }
@@ -1162,18 +1230,23 @@ const App = (() => {
     return card;
   }
 
+  function tierOf(u) {
+    const s = u.summary || {};
+    const f = s.total ? s.matched / s.total : 0;
+    return f >= 0.6 ? 'good' : f >= 0.3 ? 'partial' : 'weak';
+  }
+
   function buildFilters(el, onChange) {
     const langs = [...new Set(Store.state.universities.flatMap(u => u.languages || []))];
     const countries = [...new Set(Store.state.universities.map(u => u.country))];
+    const regions = [...new Set(countries.map(regionOf))];
     el.innerHTML = '';
+    const f = Store.state.filters;
     const make = (label, kind, value) => {
-      const { lang, country } = Store.state.filters;
-      const on = kind === 'lang' ? lang === value : country === value;
+      const on = f[kind] === value;
       const chip = h('<button class="chip ' + (on ? 'on' : '') + '">' + esc(label) + '</button>');
       chip.onclick = () => {
-        const f = Store.state.filters;
-        if (kind === 'lang') f.lang = f.lang === value ? null : value;
-        else f.country = f.country === value ? null : value;
+        f[kind] = f[kind] === value ? null : value;
         buildFilters(el, onChange);
         onChange();
       };
@@ -1181,34 +1254,62 @@ const App = (() => {
     };
     make(T('All languages'), 'lang', null);
     for (const l of langs) make(T(l), 'lang', l);
+    make(T('All regions'), 'region', null);
+    for (const r of regions) make(T(r), 'region', r);
     for (const c of countries) make(T(c), 'country', c);
+    make(T('Good match'), 'quality', 'good');
+    make(T('Partial match'), 'quality', 'partial');
+    make(T('No match'), 'quality', 'weak');
   }
 
   function viewMap(root) {
+    const tab = Store.state.mapTab || 'all';
+    // #filters / #uni-list / #sl-list stay DIRECT children of .card - the
+    // ":has(> ...)" rules in app.css (flat-list styling, the wide-screen
+    // globe grid) key off that, so the tab row must not add a wrapper div.
+    const bodyHtml = tab === 'favorite'
+      ? '<p class="hint">' + esc(T('max 3, in order of preference')) + '</p>' +
+        '<p class="hint" id="fav-empty" hidden>' + esc(T('Nothing here yet. Open a university and tap "Favorite".')) + '</p>' +
+        '<div id="sl-list"></div>'
+      : '<div class="chips" id="filters"></div><div id="uni-list"></div>';
     const wrap = h('<div class="screen panel">' +
       '<div class="card">' +
       '<p class="section-label">' + esc(T('Map')) + '</p>' +
-      '<div class="chips" id="filters"></div>' +
-      '<div id="uni-list"></div>' +
+      '<div class="tab-row">' +
+      '<button class="' + (tab === 'all' ? 'active' : '') + '" data-maptab="all">' + esc(T('All universities')) + '</button>' +
+      '<button class="' + (tab === 'favorite' ? 'active' : '') + '" data-maptab="favorite">' + icon('bookmark', 'sm-ico') + ' ' + esc(T('Favorite')) + '</button>' +
+      '</div>' +
+      bodyHtml +
       '</div></div>');
-    let globeBox = null;
-    try {
-      globeBox = Stage.mapGlobe(wrap.querySelector('#filters'), id => { Store.state.activeUniId = id; go('uni'); });
-    } catch (err) { console.warn('[map globe]', err); }
+    const card = wrap.querySelector('.card');
+    wrap.querySelectorAll('[data-maptab]').forEach(b => {
+      b.onclick = () => { Store.state.mapTab = b.dataset.maptab; render(); };
+    });
 
-    function fillList() {
-      const el = wrap.querySelector('#uni-list');
-      const { lang, country } = Store.state.filters;
-      let unis = Store.sortedUnis();
-      if (lang) unis = unis.filter(u => (u.languages || []).includes(lang));
-      if (country) unis = unis.filter(u => u.country === country);
-      el.innerHTML = '';
-      if (!unis.length) { el.innerHTML = '<p class="hint">' + esc(T('No universities match the filters.')) + '</p>'; }
-      for (const u of unis) el.appendChild(uniCard(u));
-      Stage.syncMap(globeBox);
+    if (tab === 'favorite') {
+      favoritesInto(card);
+    } else {
+      let globeBox = null;
+      try {
+        globeBox = Stage.mapGlobe(card.querySelector('#filters'), id => { Store.state.activeUniId = id; go('uni'); });
+      } catch (err) { console.warn('[map globe]', err); }
+
+      const fillList = () => {
+        const el = card.querySelector('#uni-list');
+        const { lang, country, region, quality } = Store.state.filters;
+        let unis = Store.sortedUnis();
+        if (lang) unis = unis.filter(u => (u.languages || []).includes(lang));
+        if (country) unis = unis.filter(u => u.country === country);
+        if (region) unis = unis.filter(u => regionOf(u.country) === region);
+        if (quality) unis = unis.filter(u => tierOf(u) === quality);
+        el.innerHTML = '';
+        if (!unis.length) { el.innerHTML = '<p class="hint">' + esc(T('No universities match the filters.')) + '</p>'; }
+        for (const u of unis) el.appendChild(uniCard(u));
+        Stage.syncMap(globeBox);
+      };
+      buildFilters(card.querySelector('#filters'), fillList);
+      fillList();
     }
-    buildFilters(wrap.querySelector('#filters'), fillList);
-    fillList();
     root.appendChild(wrap);
   }
 
@@ -1248,7 +1349,7 @@ const App = (() => {
       '<div class="ects-bar"><div style="width:' + Math.min(100, s.ects_covered / 30 * 100) + '%"></div></div>' +
       '<div id="rows" style="margin-top:12px"></div>' +
       '<div class="two-btns">' +
-      '<button class="ghost" id="add-sl">' + icon('plus', 'inline-ico') + ' ' + esc(T('Shortlist')) + '</button>' +
+      '<button class="ghost" id="add-sl">' + icon('plus', 'inline-ico') + ' ' + esc(T('Favorite')) + '</button>' +
       '<button class="primary" id="accepted">' + esc(T('I got accepted')) + '</button>' +
       '</div>' +
       '</div></div>');
@@ -1271,24 +1372,24 @@ const App = (() => {
     }
     wrap.querySelector('#add-sl').onclick = async () => {
       await Store.addToShortlist(u.id);
-      toast(T('Added to shortlist'));
+      toast(T('Added to favorites'));
     };
     wrap.querySelector('#accepted').onclick = () => openAcceptedSheet(u.id);
     root.appendChild(wrap);
   }
 
-  function viewShortlist(root) {
+  // Favorite: a sub-tab on the Map screen (not its own nav item any more).
+  // Fills #sl-list in place so it stays a direct child of .card, same as the
+  // old standalone screen - the "flat list" card styling keys off that.
+  function favoritesInto(mapCard) {
     const sl = (Store.state.user && Store.state.user.shortlist) || [];
-    const wrap = h('<div class="screen panel">' +
-      '<div class="card">' +
-      '<p class="section-label">' + esc(T('Shortlist')) + ' - ' + esc(T('max 3, in order of preference')) + '</p>' +
-      '<div id="sl-list"></div>' +
-      (sl.length === 0 ? '<p class="hint">' + esc(T('Nothing here yet. Open a university and tap "Shortlist".')) + '</p>' : '') +
-      '</div></div>');
-    const list = wrap.querySelector('#sl-list');
+    const emptyEl = mapCard.querySelector('#fav-empty');
+    if (emptyEl) emptyEl.hidden = sl.length !== 0;
+    const list = mapCard.querySelector('#sl-list');
+    list.innerHTML = '';
     sl.forEach((s, idx) => {
       const u = Store.uniById(s.id) || s;
-      const card = h('<div class="card uni-card">' +
+      const row = h('<div class="card uni-card">' +
         '<span class="badge"><span class="num">' + (idx + 1) + '</span></span>' +
         '<span><span class="name">' + esc(u.name) + '</span><br/>' +
         '<span class="meta">' + esc(u.city || '') + (u.summary ? ' - ' + u.summary.matched + '/' + u.summary.total + ' ' + esc(T('match')) : '') + '</span>' +
@@ -1297,14 +1398,28 @@ const App = (() => {
         '<button class="ghost accepted-btn">' + esc(T('Accepted')) + '</button>' +
         '<button class="icon-btn" data-remove aria-label="' + esc(T('Remove')) + '">' + icon('trash-2') + '</button>' +
         '</span></div>');
-      card.querySelector('[data-remove]').onclick = async () => { await Store.removeFromShortlist(s.id); render(); };
-      card.querySelector('.accepted-btn').onclick = () => openAcceptedSheet(s.id);
-      list.appendChild(card);
+      row.querySelector('[data-remove]').onclick = async () => { await Store.removeFromShortlist(s.id); render(); };
+      row.querySelector('.accepted-btn').onclick = () => openAcceptedSheet(s.id);
+      list.appendChild(row);
     });
-    root.appendChild(wrap);
   }
 
   /* ------------------------------------------------------ the "I got accepted" step */
+
+  const OVERLAP_WARN_DAYS = 14; // flag a gap shorter than this between two mobilities
+
+  // Warns when a new request overlaps the student's current active mobility,
+  // or leaves too little time between the two to realistically arrange.
+  function dateConflictMessage(newStart, newEnd) {
+    const mob = Store.state.mobility;
+    if (!mob || !mob.start_date || !mob.end_date || !newStart || !newEnd) return null;
+    const ns = parseYmd(newStart), ne = parseYmd(newEnd);
+    const os = parseYmd(mob.start_date), oe = parseYmd(mob.end_date);
+    if (ns <= oe && ne >= os) return T('This overlaps with the dates of your current mobility.');
+    const gapDays = ns > oe ? Math.round((ns - oe) / 86400000) : Math.round((os - ne) / 86400000);
+    if (gapDays < OVERLAP_WARN_DAYS) return T('Only {n} day(s) between this and your current mobility - tight to arrange.', { n: gapDays });
+    return null;
+  }
 
   function openAcceptedSheet(preId) {
     const sl = (Store.state.user && Store.state.user.shortlist) || [];
@@ -1319,6 +1434,7 @@ const App = (() => {
       dmyField('Start date', { id: 'a-start', value: ymd(defStart), from: now.getFullYear(), to: now.getFullYear() + 4 }) +
       dmyField('Arrival date (optional)', { id: 'a-arrival', value: ymd(addDays(defStart, -3)), from: now.getFullYear(), to: now.getFullYear() + 4 }) +
       dmyField('End date', { id: 'a-end', value: ymd(addDays(now, 197)), from: now.getFullYear(), to: now.getFullYear() + 5 }) +
+      '<div class="notice" id="acc-warn" hidden></div>' +
       '<p class="hint">' + esc(T('An admin from the Erasmus office confirms it before your journey starts.')) + '</p>' +
       '<button class="primary" id="acc-go">' + esc(T('Send for approval')) + '</button>' +
       '<button class="link" id="acc-cancel">' + esc(T('Not now')) + '</button>' +
@@ -1327,9 +1443,18 @@ const App = (() => {
     const startInp = sheet.querySelector('#a-start');
     const arrivalInp = sheet.querySelector('#a-arrival');
     const endInp = sheet.querySelector('#a-end');
+    const warnEl = sheet.querySelector('#acc-warn');
+    const refreshWarn = () => {
+      const msg = dateConflictMessage(startInp.value, endInp.value);
+      warnEl.hidden = !msg;
+      if (msg) warnEl.innerHTML = icon('triangle-alert', 'sm-ico') + '<span>' + esc(msg) + '</span>';
+    };
     startInp.addEventListener('change', () => {
       if (startInp.value) arrivalInp.setIso(ymd(addDays(parseYmd(startInp.value), -3)));
+      refreshWarn();
     });
+    endInp.addEventListener('change', refreshWarn);
+    refreshWarn();
     sheet.querySelector('#acc-go').onclick = async () => {
       if (!startInp.value || !endInp.value) { toast(T('Pick the start and the end date.')); return; }
       if (endInp.value <= startInp.value) { toast(T('The end date must be after the start date.')); return; }
@@ -1364,6 +1489,20 @@ const App = (() => {
 
   const stageLabel = st => T(STAGE_LABELS[st] || st);
 
+  function taskWarnings() {
+    const today = ymd(new Date());
+    const soonCutoff = ymd(addDays(new Date(), 3));
+    const open = (Store.state.tasks || []).filter(t => !t.done);
+    const overdue = open.filter(t => t.due_date && t.due_date < today).length;
+    const dueSoon = open.filter(t => t.due_date && t.due_date >= today && t.due_date <= soonCutoff).length;
+    return { total: open.length, overdue, dueSoon };
+  }
+
+  function hasOverdueTasks() {
+    const today = ymd(new Date());
+    return (Store.state.tasks || []).some(t => !t.done && t.due_date && t.due_date < today);
+  }
+
   function viewToday(root) {
     const mob = Store.state.mobility;
     const wrap0 = h('<div class="screen panel"></div>');
@@ -1395,6 +1534,10 @@ const App = (() => {
     };
     const circ = 2 * Math.PI * 52;
     const frac = Math.min(1, Math.max(0, (now - arrival) / ((end - arrival) || 1)));
+    const warn = taskWarnings();
+    const warnHtml = warn.total ? '<div class="notice' + (warn.overdue ? ' bad' : '') + '">' + icon('triangle-alert', 'sm-ico') +
+      '<span>' + esc(warn.overdue ? T('You have {n} overdue task(s)', { n: warn.overdue }) : T('You have {n} uncompleted task(s)', { n: warn.total })) +
+      (warn.dueSoon ? ' - ' + esc(T('{n} due within 3 days', { n: warn.dueSoon })) : '') + '</span></div>' : '';
     wrap0.innerHTML =
       '<div class="card today-head">' +
       '<div class="ring">' +
@@ -1407,6 +1550,7 @@ const App = (() => {
       '<p class="hint" style="margin:4px 0 0">' + esc(fmtDate(mob.start_date)) + ' → ' + esc(fmtDate(mob.end_date)) + '<br/>' + esc(uni ? uni.city + ', ' + T(uni.country) : '') + '</p>' +
       '</div></div>' +
       '<div class="card">' + countdownHtml() + '</div>' +
+      warnHtml +
       '<div class="card">' +
       '<p class="section-label">' + esc(T('Next up')) + '</p>' +
       (next.map(t => '<div class="task-card"><span><span class="t-title">' + esc(T(t.title)) + '</span><span class="t-meta">' + dueChip(t.due_date) + '</span></span></div>').join('') || '<p class="hint" style="margin:0">' + esc(T('All clear.')) + '</p>') +
@@ -1471,41 +1615,72 @@ const App = (() => {
       '<p class="hint cal-legend">' +
       '<span class="lg"><i class="sw dl"></i>' + esc(T('Deadline')) + '</span>' +
       '<span class="lg"><i class="sw task"></i>' + esc(T('Step')) + '</span>' +
-      '<span class="lg"><i class="sw avail"></i>' + esc(T('Available')) + '</span>' +
+      '<span class="lg"><i class="sw free"></i>' + esc(T('Free')) + '</span>' +
+      '<span class="lg"><i class="sw busy"></i>' + esc(T('Busy')) + '</span>' +
       '<span class="lg"><i class="sw away"></i>' + esc(T('Away')) + '</span></p>' +
-      '<p class="hint">' + esc(T('The steps above are marked on their due day. Tap a day to mark when you are free.')) + '</p>' +
+      '<p class="hint">' + esc(T('Any day you have not marked away is free by default. Tap a free day to mark it busy if you cannot use it.')) + '</p>' +
       '</div>' +
       '<div class="card">' +
       '<p class="section-label">' + esc(T('Deadlines')) + '</p>' +
       '<div id="dl-list"></div>' +
+      '</div>' +
+      '<div class="card">' +
+      '<p class="section-label">' + esc(T('Sync your calendar')) + '</p>' +
+      '<p class="hint">' + esc(T('Export your mobility dates, steps and deadlines to Google Calendar, Outlook or Apple Calendar.')) + '</p>' +
+      '<div class="two-btns">' +
+      '<a class="ghost" id="gcal-link" target="_blank" rel="noopener">' + icon('calendar-days', 'inline-ico') + ' ' + esc(T('Add to Google Calendar')) + '</a>' +
+      '<a class="ghost" id="ics-link" download="poligo.ics">' + icon('link', 'inline-ico') + ' ' + esc(T('Download .ics (subscribe)')) + '</a>' +
+      '</div>' +
       '</div></div>');
 
     const titleEl = wrap.querySelector('#cal-title');
     const gridEl = wrap.querySelector('#cal-grid');
-    const monthPrefix = () => st.calView.y + '-' + pad2(st.calView.m + 1);
+
+    const gcalA = wrap.querySelector('#gcal-link');
+    const icsA = wrap.querySelector('#ics-link');
+    if (mob && mob.start_date && mob.end_date) {
+      const startFmt = mob.start_date.replace(/-/g, '');
+      const endFmt = ymd(addDays(parseYmd(mob.end_date), 1)).replace(/-/g, '');
+      const uni = Store.uniById(mob.university_id);
+      const title = encodeURIComponent('Erasmus at ' + (uni ? uni.name : ''));
+      gcalA.href = 'https://calendar.google.com/calendar/render?action=TEMPLATE&text=' + title + '&dates=' + startFmt + '/' + endFmt;
+    } else {
+      gcalA.href = '#';
+      gcalA.onclick = e => { e.preventDefault(); toast(T('Accept a mobility first to export its dates')); };
+    }
+    icsA.href = '/api/calendar/' + Store.state.userId + '.ics';
 
     function draw() {
       const { y, m } = st.calView;
-      const freeCount = st.availability.filter(a => String(a).indexOf(monthPrefix()) === 0).length;
+      const daysInMonth = new Date(y, m + 1, 0).getDate();
+      let freeCount = 0;
+      for (let dnum = 1; dnum <= daysInMonth; dnum++) {
+        const ds = ymd(new Date(y, m, dnum));
+        if (!awaySet.has(ds) && !Store.isBusy(ds)) freeCount++;
+      }
       titleEl.textContent = T(MONTHS[m]) + ' ' + y + ' - ' + T('{n} days free', { n: freeCount });
       gridEl.innerHTML = '';
       for (const w of WDAYS) gridEl.appendChild(h('<span class="cal-wd">' + esc(T(w)) + '</span>'));
       const lead = (new Date(y, m, 1).getDay() + 6) % 7;
       for (let i = 0; i < lead; i++) gridEl.appendChild(h('<span class="cal-cell empty"></span>'));
-      const days = new Date(y, m + 1, 0).getDate();
-      for (let dnum = 1; dnum <= days; dnum++) {
+      for (let dnum = 1; dnum <= daysInMonth; dnum++) {
         const ds = ymd(new Date(y, m, dnum));
+        const away = awaySet.has(ds);
+        const busy = !away && Store.isBusy(ds);
         const cls = ['cal-cell'];
         if (ds === today) cls.push('today');
-        if (awaySet.has(ds)) cls.push('away');
-        if (Store.isAvailable(ds)) cls.push('avail');
+        if (away) cls.push('away');
+        else cls.push(busy ? 'busy' : 'free');
         if (dlSet.has(ds)) cls.push('has-dl');
         if (taskSet.has(ds)) cls.push('has-task');
         const cell = h('<button class="' + cls.join(' ') + '" aria-label="' + esc(fmtDate(ds)) + '"><span class="cal-date">' + dnum + '</span><span class="cal-mark"></span></button>');
         cell.onclick = () => {
-          const on = Store.toggleAvailability(ds);
-          cell.classList.toggle('avail', on);
-          toast(fmtDate(ds) + ' - ' + T(on ? 'Marked as available' : 'Cleared'));
+          if (away) { toast(T('Already away for your mobility')); return; }
+          const nowBusy = Store.toggleBusy(ds);
+          cell.classList.toggle('busy', nowBusy);
+          cell.classList.toggle('free', !nowBusy);
+          toast(fmtDate(ds) + ' - ' + T(nowBusy ? 'Marked busy' : 'Free'));
+          titleEl.textContent = T(MONTHS[m]) + ' ' + y + ' - ' + T('{n} days free', { n: freeCount + (nowBusy ? -1 : 1) });
         };
         gridEl.appendChild(cell);
       }
@@ -1787,6 +1962,8 @@ const App = (() => {
   function viewAdmin(root) {
     let token = Store.getAdminToken();
     let tab = 'approvals';
+    let logLevel = '';
+    let logLimit = '200';
     const wrap = h('<div class="screen panel">' +
       '<div class="card">' +
       '<p class="section-label">Admin</p>' +
@@ -1854,11 +2031,31 @@ const App = (() => {
             '<p class="section-label" style="margin-top:10px">Recent sign-ins</p>' +
             ((out.recent_signins || []).map(r => '<p class="meta">' + esc(r.ts) + ' - ' + esc(String(r.user_id).slice(0, 8)) + ' - ' + esc(r.event) + '</p>').join('') || '<p class="meta">none</p>');
         } else if (tab === 'logs') {
-          const out = await Store.adminApi('/api/admin/logs?limit=200', {}, tok);
-          body.innerHTML = (out.logs || []).map(l =>
-            '<p class="meta log-' + esc(l.level.toLowerCase()) + '">' + esc(l.ts) + ' [' + esc(l.level) + ' ' + esc(l.category) + '] ' +
-            esc(l.event) + (l.detail ? ' - ' + esc(l.detail.slice(0, 300)) : '') + '</p>'
-          ).join('') || '<p class="meta">No log lines</p>';
+          const out = await Store.adminApi('/api/admin/logs?limit=' + encodeURIComponent(logLimit) + (logLevel ? '&level=' + encodeURIComponent(logLevel) : ''), {}, tok);
+          const logs = out.logs || [];
+          body.innerHTML =
+            '<div class="log-toolbar">' +
+            '<div class="select-wrap"><select id="log-level">' +
+            ['', 'INFO', 'WARN', 'ERROR'].map(v => '<option value="' + v + '" ' + (v === logLevel ? 'selected' : '') + '>' + (v || 'All levels') + '</option>').join('') +
+            '</select>' + icon('chevron-down', 'sel-ico') + '</div>' +
+            '<div class="select-wrap"><select id="log-limit">' +
+            ['50', '100', '200', '500'].map(v => '<option ' + (v === logLimit ? 'selected' : '') + '>' + v + '</option>').join('') +
+            '</select>' + icon('chevron-down', 'sel-ico') + '</div>' +
+            '<input id="log-q" placeholder="Search logs..." />' +
+            '</div>' +
+            '<p class="meta">' + logs.length + ' lines shown</p>' +
+            '<div class="log-box">' +
+            (logs.map(l =>
+              '<p class="meta log-' + esc(l.level.toLowerCase()) + '" title="' + esc(l.ts) + '">' + esc(l.ts.slice(5, 16)) + ' [' + esc(l.level) + ' ' + esc(l.category) + '] ' +
+              esc(l.event) + (l.detail ? ' - ' + esc(l.detail.slice(0, 200)) : '') + '</p>'
+            ).join('') || '<p class="meta">No log lines</p>') +
+            '</div>';
+          body.querySelector('#log-level').onchange = e => { logLevel = e.target.value; load(); };
+          body.querySelector('#log-limit').onchange = e => { logLimit = e.target.value; load(); };
+          body.querySelector('#log-q').oninput = e => {
+            const qq = e.target.value.toLowerCase();
+            body.querySelectorAll('.log-box p').forEach(p => { p.hidden = !!qq && p.textContent.toLowerCase().indexOf(qq) === -1; });
+          };
         } else {
           const out = await Store.adminApi('/api/admin/messages', {}, tok);
           body.innerHTML =

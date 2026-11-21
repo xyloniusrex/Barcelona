@@ -22,7 +22,8 @@ const Store = (() => {
     tasks: [],
     screen: 'welcome',
     activeUniId: null,
-    filters: { lang: null, country: null },
+    filters: { lang: null, country: null, region: null, quality: null },
+    mapTab: 'all',
   };
 
   function newId() {
@@ -190,13 +191,16 @@ const Store = (() => {
     return out;
   }
 
-  /* ---------- availability (calendar day toggles) ---------- */
+  /* ---------- availability (calendar day toggles) ----------
+   * Any day the student has not accepted a mobility into is free by default;
+   * `state.availability` holds the exceptions - days explicitly marked busy
+   * despite not being away on a mobility. */
 
-  function isAvailable(dateStr) {
+  function isBusy(dateStr) {
     return state.availability.indexOf(dateStr) !== -1;
   }
 
-  function toggleAvailability(dateStr) {
+  function toggleBusy(dateStr) {
     const i = state.availability.indexOf(dateStr);
     if (i === -1) state.availability.push(dateStr);
     else state.availability.splice(i, 1);
@@ -434,6 +438,6 @@ const Store = (() => {
     getInbox, replyInbox, markInboxRead, adminApi, getAdminToken, setAdminToken,
     safeUserDocs, addUserDoc, updateUserDoc, deleteUserDoc, saveDocBlob, getDocBlob, deleteDocBlob,
     loadStrings, t, setTheme, setLanguage,
-    isAvailable, toggleAvailability,
+    isBusy, toggleBusy,
   };
 })();

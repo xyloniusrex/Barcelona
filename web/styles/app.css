@@ -424,6 +424,14 @@ body.no-scroll { overflow: hidden; }
   white-space: nowrap;
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--surface) 90%, var(--bg));
 }
+.nav-dot {
+  position: absolute;
+  top: -2px; right: -3px;
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--none);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--surface) 90%, var(--bg));
+}
 
 /* ---------------------------------------------------------------- landing */
 .landing { max-width: 600px; margin: 0 auto; padding: calc(var(--topbar) + var(--safe-top) + 28px) 20px 56px; }
@@ -490,6 +498,25 @@ body.no-scroll { overflow: hidden; }
 .steps { display: flex; gap: 6px; margin-bottom: 14px; }
 .steps i { flex: 1; height: 4px; border-radius: 2px; background: var(--border); }
 .steps i.on { background: var(--accent-live); }
+
+/* map / favorite sub-tabs */
+.tab-row { display: flex; gap: 8px; margin-bottom: 16px; }
+.tab-row button {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 42px;
+  padding: 0 8px;
+  border-radius: 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text-2);
+  font: 600 13.5px/1 var(--font);
+  transition: color .15s, background .15s, border-color .15s;
+}
+.tab-row button.active { color: var(--accent-live); background: var(--accent-soft); border-color: var(--accent-line); }
 
 .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
 .chip {
@@ -648,7 +675,8 @@ label.task-card { cursor: pointer; }
 .cal-cell.empty { background: none; border: 0; }
 button.cal-cell:hover { border-color: var(--border); }
 .cal-cell.away { background: color-mix(in srgb, var(--accent-live) 11%, var(--surface-2)); }
-.cal-cell.avail { background: var(--accent-soft); border-color: var(--accent-line); color: var(--accent-live); font-weight: 600; }
+.cal-cell.avail, .cal-cell.free { background: var(--surface-2); }
+.cal-cell.busy { background: var(--none-soft); border-color: color-mix(in srgb, var(--none) 55%, transparent); color: var(--none); font-weight: 600; }
 .cal-cell.today { border-color: var(--accent-live); font-weight: 700; box-shadow: inset 0 0 0 1px var(--accent-live); }
 .cal-mark { display: block; width: 5px; height: 5px; font-size: 0; line-height: 0; }
 .cal-cell.has-task .cal-mark { border-radius: 50%; background: var(--accent); }
@@ -658,7 +686,8 @@ button.cal-cell:hover { border-color: var(--border); }
 .cal-legend .sw { width: 10px; height: 10px; border-radius: 3px; flex: none; }
 .cal-legend .sw.dl { border-radius: 50%; background: var(--partial); }
 .cal-legend .sw.task { border-radius: 50%; background: var(--accent); }
-.cal-legend .sw.avail { background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent-line); }
+.cal-legend .sw.avail, .cal-legend .sw.free { background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--border); }
+.cal-legend .sw.busy { background: var(--none-soft); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--none) 55%, transparent); }
 .cal-legend .sw.away { background: color-mix(in srgb, var(--accent-live) 28%, var(--surface-2)); }
 
 /* --------------------------------------------------------------- documents */
@@ -795,6 +824,21 @@ body:has(> .sheet)::before { content: ""; position: fixed; inset: 0; z-index: 29
 @keyframes sheet-up { from { transform: translateY(40px); opacity: 0; } }
 @keyframes fade-in { from { opacity: 0; } }
 
+/* inline warnings: date conflicts, task reminders */
+.notice {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  margin-bottom: 16px;
+  border-radius: 10px;
+  background: var(--partial-soft);
+  color: var(--partial);
+  font: 500 13.5px/19px var(--font);
+}
+.notice.bad { background: var(--none-soft); color: var(--none); }
+.notice .icon { flex: none; margin-top: 2px; }
+
 /* ------------------------------------------------------------------- toast */
 #toast {
   position: fixed;
@@ -829,6 +873,10 @@ body:has(> .sheet)::before { content: ""; position: fixed; inset: 0; z-index: 29
 .log-info { color: var(--text-2); }
 .log-warn { color: var(--partial); }
 .log-error { color: var(--none); }
+.log-toolbar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.log-toolbar .select-wrap { flex: 1; min-width: 110px; }
+.log-toolbar input { flex: 2; min-width: 140px; }
+.log-box { max-height: 420px; overflow-y: auto; border: 1px solid var(--line); border-radius: 10px; padding: 2px 10px; }
 
 /* ------------------------------------------------- terminal overlay (term.js) */
 /* Monospace is kept here on purpose: the --help tutorial and the ghost
@@ -1004,12 +1052,13 @@ body:has(> .sheet)::before { content: ""; position: fixed; inset: 0; z-index: 29
   body[data-screen="map"] .card:has(> .globe-box) {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 400px;
-    grid-template-rows: auto auto 1fr;
-    grid-template-areas: "label label" "globe filters" "globe list";
+    grid-template-rows: auto auto auto 1fr;
+    grid-template-areas: "label label" "tabs tabs" "globe filters" "globe list";
     column-gap: 24px;
     align-items: start;
   }
   body[data-screen="map"] .card:has(> .globe-box) > .section-label { grid-area: label; }
+  body[data-screen="map"] .card:has(> .globe-box) > .tab-row { grid-area: tabs; }
   body[data-screen="map"] .card:has(> .globe-box) > .globe-box {
     grid-area: globe;
     position: sticky;
