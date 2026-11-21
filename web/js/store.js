@@ -362,10 +362,50 @@ const Store = (() => {
     try { const db = await docsDb(); await idbTx(db, 'readwrite', s => s.delete(docKey(docType))); } catch (e) {}
   }
 
+  /* ---------- inbox (admin-user communication) ---------- */
+
+  async function getInbox() {
+    try { return await api('/api/inbox/' + state.userId); }
+    catch (e) { return { messages: [], unread: 0 }; }
+  }
+
+  async function replyInbox(text) {
+    return api('/api/inbox/' + state.userId + '/reply', { method: 'POST', body: JSON.stringify({ text }) });
+  }
+
+  async function markInboxRead() {
+    try { await api('/api/inbox/' + state.userId + '/read', { method: 'POST', body: JSON.stringify({}) }); } catch (e) {}
+  }
+
+  /* ---------- admin calls (bearer = admin token, not user session) ---------- */
+
+  function adminApi(path, opts, token) {
+    const headers = Object.assign({ 'Content-Type': 'application/json' }, opts && opts.headers);
+    if (token) headers['Authorization'] = 'Bearer ' + token;
+    return fetch(path, Object.assign({}, opts, { headers })).then(async res => {
+      if (!res.ok) {
+        let detail = {};
+        try { detail = await res.json(); } catch (e) { detail = {}; }
+        const err = new Error((detail.message || res.statusText) + ' [' + (detail.error || res.status) + ']');
+        err.code = detail.error || ('ERR_HTTP_' + res.status);
+        err.status = res.status;
+        throw err;
+      }
+      return res.json();
+    });
+  }
+
+  const ADMIN_TOKEN_KEY = 'poligo-admin-token';
+
+  function getAdminToken() { try { return localStorage.getItem(ADMIN_TOKEN_KEY) || ''; } catch (e) { return ''; } }
+
+  function setAdminToken(token) { try { if (token) localStorage.setItem(ADMIN_TOKEN_KEY, token); else localStorage.removeItem(ADMIN_TOKEN_KEY); } catch (e) {} }
+
   return {
     state, boot, saveProfile, saveLocal, uniById, score, sortedUnis,
     addToShortlist, removeFromShortlist, accept, toggleTask, addTask, scan, getScans, getUniversityDetail,
     requestAuthCode, verifyAuthCode, logout, notify,
+    getInbox, replyInbox, markInboxRead, adminApi, getAdminToken, setAdminToken,
     safeUserDocs, addUserDoc, updateUserDoc, deleteUserDoc, saveDocBlob, getDocBlob, deleteDocBlob,
     loadStrings, t, setTheme, setLanguage,
     isAvailable, toggleAvailability,
