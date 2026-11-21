@@ -15,6 +15,10 @@ CREATE TABLE IF NOT EXISTS users (
     year INTEGER,
     semester_abroad TEXT,
     mode TEXT NOT NULL DEFAULT 'explore',
+    theme TEXT,
+    language TEXT,
+    onboarding TEXT,
+    availability TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE TABLE IF NOT EXISTS home_courses (
@@ -91,12 +95,31 @@ CREATE TABLE IF NOT EXISTS scanned_docs (
     result_json TEXT NOT NULL,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+CREATE TABLE IF NOT EXISTS user_docs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT NOT NULL REFERENCES users(id),
+    doc_type TEXT NOT NULL,
+    file_name TEXT,
+    size INTEGER NOT NULL DEFAULT 0,
+    doc_number TEXT,
+    issued_on TEXT,
+    expires_on TEXT,
+    notes TEXT,
+    uploaded_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE (user_id, doc_type)
+);
 CREATE TABLE IF NOT EXISTS signups (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     email TEXT NOT NULL,
     faculty TEXT,
     wants TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS translations (
+    lang TEXT NOT NULL,
+    key TEXT NOT NULL,
+    text TEXT NOT NULL,
+    PRIMARY KEY (lang, key)
 );
 CREATE INDEX IF NOT EXISTS idx_matches_uni ON matches(university_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_mob ON tasks(mobility_id);
@@ -125,6 +148,25 @@ def db():
 def init_db():
     with db() as conn:
         conn.executescript(SCHEMA)
+        for stmt in MIGRATIONS:
+            try:
+                conn.execute(stmt)
+            except sqlite3.OperationalError:
+                pass  # column/table already exists
+
+
+# incremental changes for databases created by older versions
+MIGRATIONS = [
+    "ALTER TABLE users ADD COLUMN theme TEXT",
+    "ALTER TABLE users ADD COLUMN language TEXT",
+    "ALTER TABLE users ADD COLUMN onboarding TEXT",
+    "ALTER TABLE users ADD COLUMN availability TEXT",
+    "ALTER TABLE user_docs ADD COLUMN file_name TEXT",
+    "ALTER TABLE user_docs ADD COLUMN doc_number TEXT",
+    "ALTER TABLE user_docs ADD COLUMN issued_on TEXT",
+    "ALTER TABLE user_docs ADD COLUMN expires_on TEXT",
+    "ALTER TABLE user_docs ADD COLUMN notes TEXT",
+]
 
 
 def j(value) -> str:

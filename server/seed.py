@@ -160,3 +160,34 @@ def seed():
             [(PROGRAM, m["university_id"], m["home_course_id"], m["partner_course_id"], m["label"], m["explanation"], j(m.get("missing_topics", []))) for m in MATCHES],
         )
     return True
+
+
+# Project paperwork deadlines: months before the mobility start date.
+# Served by /api/deadlines and filtered client-side by the types the user
+# picked during onboarding.
+PROJECT_DEADLINES = [
+    {"type": "Semester exchange", "title": "Nomination sent by your faculty", "months_before": 5,
+     "note": "Your coordinator nominates you at the partner university."},
+    {"type": "Semester exchange", "title": "Accommodation applications", "months_before": 4,
+     "note": "Dormitories and partner housing portals open around this time."},
+    {"type": "Semester exchange", "title": "Learning Agreement - first signature", "months_before": 3,
+     "note": "Signed by you, UPT coordinator, partner coordinator."},
+    {"type": "Semester exchange", "title": "Grant contract signing", "months_before": 2,
+     "note": "Bring your bank details (IBAN) to the international office."},
+    {"type": "Semester exchange", "title": "Enrolment / registration at the host", "months_before": 1,
+     "note": "Complete the partner university online registration."},
+    {"type": "Summer school", "title": "Application submission", "months_before": 3,
+     "note": "Transcript and motivation letter are usually required."},
+    {"type": "Summer school", "title": "Tuition deposit", "months_before": 2,
+     "note": "Non-refundable in most programmes - check the cancellation policy."},
+    {"type": "Summer school", "title": "Final payment", "months_before": 1,
+     "note": "Full tuition and accommodation are due before arrival."},
+    {"type": "Research stay", "title": "Host agreement / invitation letter", "months_before": 3,
+     "note": "Required by the international office before funding."},
+    {"type": "Research stay", "title": "Work plan approved by both supervisors", "months_before": 2,
+     "note": "Defines the scope and credit conversion of your stay."},
+    {"type": "Sports programme", "title": "Registration window", "months_before": 2,
+     "note": "Erasmus+ sport events fill up fast - register early."},
+    {"type": "Sports programme", "title": "Medical certificate", "months_before": 1,
+     "note": "Standard fitness declaration for competitive events."},
+]

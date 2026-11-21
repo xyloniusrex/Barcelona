@@ -1,22 +1,21 @@
 /* sw.js — device-side caching policy.
  *
  * Strict split, per the PoliGo storage rules:
- *  - cache-first (immutable, on-device): app shell, map data, seed endpoints,
- *    and every Python-rendered animation clip. The server streams a clip once;
- *    all later playbacks come from this cache.
+ *  - cache-first (immutable, on-device): app shell, seed endpoints, and every
+ *    Python-rendered animation clip. The server streams a clip once; all later
+ *    playbacks come from this cache.
  *  - network-first with cache fallback: user data reads (profile, tasks,
  *    scans) so journeys still open offline.
  *  - never cached: writes (POST/PATCH/DELETE).
  */
-const VERSION = 'poligo-v1';
+const VERSION = 'poligo-v3';
 const SHELL = VERSION + '-shell';
 const DATA = VERSION + '-data';
 
 const PRECACHE = [
   '/', '/index.html', '/css/app.css',
-  '/js/store.js', '/js/globe.js', '/js/anim.js', '/js/app.js',
+  '/js/icons.js', '/js/store.js', '/js/anim.js', '/js/app.js',
   '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png',
-  '/data/countries-110m.geojson',
 ];
 
 self.addEventListener('install', e => {
