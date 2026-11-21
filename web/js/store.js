@@ -23,7 +23,8 @@ const Store = (() => {
     screen: 'welcome',
     activeUniId: null,
     filters: { lang: null, country: null, region: null, quality: null },
-    mapTab: 'all',
+    mapTab: 'list',     // Universities screen: list | map | favorite
+    mapView: 'list',    // last of list | map, restored when leaving Favorite
   };
 
   function newId() {

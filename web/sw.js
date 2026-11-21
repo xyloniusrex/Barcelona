@@ -8,7 +8,7 @@
  *    scans) so journeys still open offline.
  *  - never cached: writes (POST/PATCH/DELETE).
  */
-const VERSION = 'poligo-v11';
+const VERSION = 'poligo-v12';
 const SHELL = VERSION + '-shell';
 const DATA = VERSION + '-data';
 

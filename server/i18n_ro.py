@@ -14,6 +14,8 @@ RO = {
     "Shortlist": "Lista scurtă",
     "Favorite": "Preferate",
     "All universities": "Toate universitățile",
+    "List": "Listă",
+    "{n} universities, best match first": "{n} universități, cele mai potrivite primele",
     "Profile": "Profil",
     "Today": "Astăzi",
     "Calendar": "Calendar",

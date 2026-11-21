@@ -552,6 +552,26 @@ body.no-scroll { overflow: hidden; }
 }
 .tab-row button.active { color: var(--accent-live); background: var(--accent-soft); border-color: var(--accent-line); }
 
+/* Universities screen: List / Map / Favorite on a phone; globe + list side by side on a wide screen */
+.tab-count {
+  min-width: 20px;
+  padding: 3px 6px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-live);
+  font: 700 11px/1 var(--font);
+  font-variant-numeric: tabular-nums;
+}
+.tab-wide { display: none; }
+#uni-count { margin: 0 0 10px; font-size: 12.5px; }
+.uni-screen.view-list > .globe-box { display: none; }
+.uni-screen.view-map > #uni-list, .uni-screen.view-map > #uni-count { display: none; }
+.uni-screen.view-map > .globe-box {
+  height: calc(100vh - var(--topbar) - var(--nav-h) - 250px);
+  height: calc(100dvh - var(--topbar) - var(--nav-h) - 250px);
+  min-height: 340px;
+}
+
 .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
 .chip {
   display: inline-flex;
@@ -1033,10 +1053,6 @@ body:has(> .sheet)::before { content: ""; position: fixed; inset: 0; z-index: 29
   .card { padding: 14px; }
 }
 
-@media (min-width: 720px) {
-  body[data-screen="universities"] #uni-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
-
 @media (min-width: 900px) {
   :root { --topbar: 64px; }
   .hero h1 { font-size: 52px; }
@@ -1095,8 +1111,15 @@ body:has(> .sheet)::before { content: ""; position: fixed; inset: 0; z-index: 29
   #bottomNav button.active::before { top: -7px; }
   #toast { bottom: calc(var(--nav-h) + 44px); }
 
-  /* map + universities use the wide layout */
-  body[data-screen="map"] .panel, body[data-screen="universities"] .panel { max-width: 1040px; }
+  /* the Universities screen uses the wide layout */
+  body[data-screen="map"] .panel { max-width: 1040px; }
+
+  /* globe and list both fit: the tab row is just All universities / Favorite */
+  .tab-row .tab-narrow, .tab-row [data-maptab="map"] { display: none; }
+  .tab-row .tab-wide { display: inline; }
+  .tab-row button.active-wide { color: var(--accent-live); background: var(--accent-soft); border-color: var(--accent-line); }
+  .uni-screen.view-list > .globe-box, .uni-screen.view-map > #uni-list, .uni-screen.view-map > #uni-count { display: block; }
+  .uni-screen.view-map > #uni-list { display: grid; }
 
   .sheet {
     left: 0; right: 0; bottom: 24px;
@@ -1111,8 +1134,8 @@ body:has(> .sheet)::before { content: ""; position: fixed; inset: 0; z-index: 29
   body[data-screen="map"] .card:has(> .globe-box) {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 400px;
-    grid-template-rows: auto auto auto 1fr;
-    grid-template-areas: "label label" "tabs tabs" "globe filters" "globe list";
+    grid-template-rows: auto auto auto auto 1fr;
+    grid-template-areas: "label label" "tabs tabs" "globe filters" "globe count" "globe list";
     column-gap: 24px;
     align-items: start;
   }
@@ -1128,6 +1151,7 @@ body:has(> .sheet)::before { content: ""; position: fixed; inset: 0; z-index: 29
     margin: 0;
   }
   body[data-screen="map"] .card:has(> .globe-box) > #filters { grid-area: filters; }
+  body[data-screen="map"] .card:has(> .globe-box) > #uni-count { grid-area: count; }
   body[data-screen="map"] .card:has(> .globe-box) > #uni-list { grid-area: list; }
 }
 

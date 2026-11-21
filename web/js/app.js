@@ -7,7 +7,7 @@
  * Shape of the app:
  *   top bar   PoliGo logo (-> Home) . language . theme . Home . Profile
  *   Home      globe with Romania + your destination, live countdown, the menu
- *   screens   map / universities / shortlist (explore),
+ *   screens   universities (list / map / favorite in one screen) . my subjects (explore),
  *             today / plan (calendar + steps) / documents (journey)
  *   pending   "I got accepted" waits for an admin to approve it before the journey opens
  *   intro     full-screen start window after you are accepted (and on every launch)
@@ -15,8 +15,9 @@
 const App = (() => {
   const NAVS = {
     explore: [
-      ['map', 'Map'],
-      ['universities', 'Universities'],
+      ['map', 'Universities'],
+      ['shortlist', 'Favorite'],
+      ['subjects', 'My subjects'],
     ],
     journey: [
       ['today', 'Today'],
@@ -25,14 +26,13 @@ const App = (() => {
     ],
   };
   const NAV_ICONS = {
-    map: 'map', universities: 'landmark',
+    map: 'landmark', shortlist: 'bookmark', subjects: 'check',
     today: 'sun', plan: 'calendar-days', docs: 'file-text',
   };
   // [screen, label, icon, one-line description] - the tiles on Home
   const MENU = {
     explore: [
-      ['map', 'Map', 'map', 'Partner universities on the globe'],
-      ['universities', 'Universities', 'landmark', 'Compare how many subjects match'],
+      ['map', 'Universities', 'landmark', 'Compare how many subjects match'],
       ['shortlist', 'Favorite', 'bookmark', 'Your top 3, in order'],
       ['subjects', 'My subjects', 'check', 'Choose what to match'],
       ['profile', 'Profile', 'user', 'Account and settings'],
@@ -49,7 +49,10 @@ const App = (() => {
   const KNOWN = new Set(['landing', 'auth', 'onboarding', 'uni', 'subjects', 'scanJ', 'admin', 'home', 'profile', 'map',
     'universities', 'shortlist', 'today', 'plan', 'docs']);
   // old screen names (links, saved state, the terminal) -> where they live now
-  const ALIAS = { calendar: 'plan', timeline: 'plan', docsSetup: 'docs', shortlist: 'map' };
+  // "map" is the one Universities screen; Store.state.mapTab picks list / map / favorite.
+  const ALIAS = { calendar: 'plan', timeline: 'plan', docsSetup: 'docs', shortlist: 'map', universities: 'map' };
+  // which sub-tab an old screen name opens
+  const ALIAS_TAB = { shortlist: 'favorite', universities: 'list' };
   const STAGES = ['before', 'arrival', 'during', 'before-return', 'after-return'];
   const STAGE_LABELS = {
     before: 'Before departure', arrival: 'Arrival (first 2 weeks)', during: 'During',
@@ -346,8 +349,8 @@ const App = (() => {
 
   function go(screen, opts) {
     opts = opts || {};
-    if (screen === 'shortlist') {
-      Store.state.mapTab = 'favorite'; // moved under Map as a sub-tab
+    if (ALIAS_TAB[screen]) {
+      Store.state.mapTab = ALIAS_TAB[screen];
       if (Store.state.screen === 'map') { Store.saveLocal(); render(); syncHash('map'); return; }
     }
     screen = ALIAS[screen] || screen;
@@ -379,7 +382,7 @@ const App = (() => {
   window.addEventListener('hashchange', () => {
     if (hashLock) return;
     const raw = (location.hash || '').replace(/^#/, '') || 'landing';
-    if (raw === 'shortlist') Store.state.mapTab = 'favorite';
+    if (ALIAS_TAB[raw]) Store.state.mapTab = ALIAS_TAB[raw];
     const s = ALIAS[raw] || raw;
     if (!KNOWN.has(s) || s === Store.state.screen) return;
     if (s === 'landing' && Store.state.seenLanding) return;
@@ -446,11 +449,20 @@ const App = (() => {
     $nav.innerHTML = '';
     const group = navGroupFor(screen, mode);
     const cd = group === 'journey' ? navCountdownText() : '';
+    const tab = mapTabNow();
+    const isActive = id => id === 'map' ? screen === 'map' && tab !== 'favorite'
+      : id === 'shortlist' ? screen === 'map' && tab === 'favorite'
+      : screen === id;
     for (const [id, label] of NAVS[group]) {
       const badge = id === 'today' && cd ? '<span class="nav-cd" data-nav-cd>' + esc(cd) + '</span>' : '';
       const dot = id === 'plan' && hasOverdueTasks() ? '<span class="nav-dot"></span>' : '';
-      const b = h('<button class="' + (screen === id ? 'active' : '') + '"><span class="ico">' + icon(NAV_ICONS[id]) + badge + dot + '</span><span>' + esc(T(label)) + '</span></button>');
-      b.onclick = () => go(id);
+      const b = h('<button class="' + (isActive(id) ? 'active' : '') + '"><span class="ico">' + icon(NAV_ICONS[id]) + badge + dot + '</span><span>' + esc(T(label)) + '</span></button>');
+      b.onclick = () => {
+        // "Universities" from Favorite goes back to the last list / map view
+        if (id === 'map' && tab === 'favorite') Store.state.mapTab = Store.state.mapView || 'list';
+        if (id === 'map' && screen === 'map') { Store.saveLocal(); render(); return; }
+        go(id);
+      };
       $nav.appendChild(b);
     }
     if (cd) {
@@ -482,7 +494,7 @@ const App = (() => {
       const views = {
         landing: viewLanding, auth: viewAuth, onboarding: viewOnboarding,
         home: viewHome, profile: viewProfile, subjects: viewSubjects,
-        map: viewMap, universities: viewUniversities, uni: viewUniversity,
+        map: viewMap, uni: viewUniversity,
         today: viewToday, plan: viewPlan,
         scanJ: viewScan, docs: viewDocs, admin: viewAdmin,
       };
@@ -1260,8 +1272,16 @@ const App = (() => {
     });
   }
 
+  // Universities: one screen, three views. On a phone the tab row switches
+  // List / Map / Favorite; on a wide screen the globe and the list sit side by
+  // side (app.css), so the row shows only All universities / Favorite.
+  function mapTabNow() {
+    const t = Store.state.mapTab;
+    return t === 'map' || t === 'favorite' ? t : 'list';   // 'all' (old saved state) -> list
+  }
+
   function viewMap(root) {
-    const tab = Store.state.mapTab || 'all';
+    const tab = mapTabNow();
     // #filters / #uni-list / #sl-list stay DIRECT children of .card - the
     // ":has(> ...)" rules in app.css (flat-list styling, the wide-screen
     // globe grid) key off that, so the tab row must not add a wrapper div.
@@ -1269,19 +1289,30 @@ const App = (() => {
       ? '<p class="hint">' + esc(T('Save as many as you like, in order of preference.')) + '</p>' +
         '<p class="hint" id="fav-empty" hidden>' + esc(T('Nothing here yet. Open a university and tap "Favorite".')) + '</p>' +
         '<div id="sl-list"></div>'
-      : '<div id="filters"></div><div id="uni-list"></div>';
+      : '<div id="filters"></div><p class="hint" id="uni-count"></p><div id="uni-list"></div>';
+    const favN = ((Store.state.user && Store.state.user.shortlist) || []).length;
+    // on a wide screen "List" reads "All universities" and also stands for the map view
+    const cls = id => tab === id ? 'active' : (id === 'list' && tab === 'map' ? 'active-wide' : '');
+    const tabBtn = (id, inner) => '<button class="' + cls(id) + '" data-maptab="' + id + '" role="tab" aria-selected="' + (tab === id) + '">' + inner + '</button>';
     const wrap = h('<div class="screen panel">' +
-      '<div class="card">' +
-      '<p class="section-label">' + esc(T('Map')) + '</p>' +
-      '<div class="tab-row">' +
-      '<button class="' + (tab === 'all' ? 'active' : '') + '" data-maptab="all">' + esc(T('All universities')) + '</button>' +
-      '<button class="' + (tab === 'favorite' ? 'active' : '') + '" data-maptab="favorite">' + icon('bookmark', 'sm-ico') + ' ' + esc(T('Favorite')) + '</button>' +
+      '<div class="card uni-screen view-' + tab + '">' +
+      '<p class="section-label">' + esc(T('Universities')) + '</p>' +
+      '<div class="tab-row" role="tablist">' +
+      tabBtn('list', '<span class="tab-narrow">' + esc(T('List')) + '</span><span class="tab-wide">' + esc(T('All universities')) + '</span>') +
+      tabBtn('map', icon('map', 'sm-ico') + ' ' + esc(T('Map'))) +
+      tabBtn('favorite', icon('bookmark', 'sm-ico') + ' ' + esc(T('Favorite')) + (favN ? ' <span class="tab-count">' + favN + '</span>' : '')) +
       '</div>' +
       bodyHtml +
       '</div></div>');
     const card = wrap.querySelector('.card');
     wrap.querySelectorAll('[data-maptab]').forEach(b => {
-      b.onclick = () => { Store.state.mapTab = b.dataset.maptab; render(); };
+      b.onclick = () => {
+        const t = b.dataset.maptab;
+        Store.state.mapTab = t;
+        if (t !== 'favorite') Store.state.mapView = t;
+        Store.saveLocal();
+        render();
+      };
     });
 
     if (tab === 'favorite') {
@@ -1289,7 +1320,8 @@ const App = (() => {
     } else {
       let globeBox = null;
       try {
-        globeBox = Stage.mapGlobe(card.querySelector('#filters'), id => { Store.state.activeUniId = id; go('uni'); });
+        // inserted before #uni-count, i.e. under the filters (the wide layout places it by grid-area)
+        globeBox = Stage.mapGlobe(card.querySelector('#uni-count'), id => { Store.state.activeUniId = id; go('uni'); });
       } catch (err) { console.warn('[map globe]', err); }
 
       const fillList = () => {
@@ -1303,22 +1335,12 @@ const App = (() => {
         el.innerHTML = '';
         if (!unis.length) { el.innerHTML = '<p class="hint">' + esc(T('No universities match the filters.')) + '</p>'; }
         for (const u of unis) el.appendChild(uniCard(u));
+        card.querySelector('#uni-count').textContent = T('{n} universities, best match first', { n: unis.length });
         Stage.syncMap(globeBox);
       };
       buildFilters(card.querySelector('#filters'), fillList);
       fillList();
     }
-    root.appendChild(wrap);
-  }
-
-  function viewUniversities(root) {
-    const wrap = h('<div class="screen panel">' +
-      '<div class="card">' +
-      '<p class="section-label">' + esc(T('Universities')) + '</p>' +
-      '<div id="uni-list"></div>' +
-      '</div></div>');
-    const list = wrap.querySelector('#uni-list');
-    for (const u of Store.sortedUnis()) list.appendChild(uniCard(u));
     root.appendChild(wrap);
   }
 
